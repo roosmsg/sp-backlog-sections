@@ -4,7 +4,18 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.10.0)
+## What exists (2026-08-23, v2.11.0)
+
+- v2.11.0 (user report 2026-08-23: dropping into a collapsed section is
+  hard — its band is one header tall and the CDK sorts against hidden rows):
+  **collapsed sections open temporarily while a drag runs**. decorate() skips
+  the hidden attribute while `dragging` (trackDrag runs earlier in the same
+  pass, so the placeholder mutation that starts the drag unhides in one
+  pass); `dragUnfolded` remembers that something was opened, and
+  stopDragTracking refolds via reapplySoon() only then — unconditional
+  refolding leaked 250 ms decorate timers across tests and would fire
+  pointlessly in normal use. Stored collapse state is untouched: the section
+  folds back with the dropped task inside. Not yet verified live.
 
 - v2.10.0 (user request 2026-08-23, after v2.9.0 made dragging out of the
   bottom loose block awkward): **"Zonder sectie" is now a real standard

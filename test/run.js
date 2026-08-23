@@ -603,6 +603,37 @@ test('headers: collapse hides the rows of the section, is remembered per device,
   });
 });
 
+test('headers: a collapsed section opens while a drag runs and folds back after', async () => {
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
+
+    // The CDK placeholder appears: the drag is on, the rows open up.
+    const placeholder = doc.createElement('task');
+    placeholder.className = 'cdk-drag-placeholder';
+    placeholder.setAttribute('data-task-id', 'u1');
+    doc.backlogList.appendChild(placeholder);
+    FakeMutationObserver.instances[0].trigger();
+    assert.deepStrictEqual(hidden(), [], 'during the drag every row is visible');
+
+    // Release over the collapsed section's header: the drop still lands there.
+    layout(doc.backlogList);
+    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
+    doc.dispatch('pointerup', {});
+    doc.backlogList.removeChild(placeholder);
+    await host.userDragsInBacklog('p1', 'u1', ['a1', 'a2', 'u1', 'b1', 'b2']);
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'dropped into the collapsed section');
+
+    // The refold is scheduled; after it fires the rows are hidden again.
+    await sleep(300);
+    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'folded back after the drag, with the new member inside');
+  });
+});
+
 test('headers: several empty sections in a row settle down and stay put', async () => {
   // Adjacent empty headers used to swap places on every pass, and every swap
   // asked for the next one: the app locked up on opening the backlog.

@@ -891,6 +891,12 @@
   function stopDragTracking() {
     markTarget(null);
     draggedTaskId = null;
+    // Only when collapsed sections were opened for this drag is there
+    // anything to fold again.
+    if (dragUnfolded) {
+      dragUnfolded = false;
+      reapplySoon();
+    }
     var doc = hostDocument();
     var list = doc && typeof doc.querySelector === 'function' ? doc.querySelector(LIST_SELECTOR) : null;
     if (list && list.className.indexOf(DRAGGING_CLASS) !== -1) {
@@ -935,6 +941,7 @@
     debug('drag started', draggedTaskId);
   }
 
+  var dragUnfolded = false;
   var decorating = false;
   // A pass that keeps asking for another pass would lock up the app. The
   // brake bounds how often the headers may be redrawn; it never trips in
@@ -1018,7 +1025,15 @@
         if (header.nextSibling !== first) {
           list.insertBefore(header, first);
         }
-        var hide = isCollapsed(activeProjectId, key);
+        // While a drag runs, collapsed sections open up temporarily: their
+        // rows must be visible for the CDK to sort against and for the user
+        // to aim at. The stored collapse state is untouched; the rows hide
+        // again the moment the drag ends.
+        var collapsed = isCollapsed(activeProjectId, key);
+        if (collapsed && dragging) {
+          dragUnfolded = true;
+        }
+        var hide = collapsed && !dragging;
         if (hide) {
           debug('collapse: hiding', key, block.taskIds.length);
         }
