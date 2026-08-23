@@ -1,0 +1,58 @@
+{
+  "PLUGIN": {
+    "NAME": "Backlog Sections"
+  },
+  "BACKGROUND": {
+    "NO_SECTION": "No section",
+    "HEADER_BUTTON": "Backlog sections",
+    "COLLAPSE": "Collapse section",
+    "EXPAND": "Expand section"
+  },
+  "UI": {
+    "TITLE": "Backlog Sections",
+    "INTRO": "Named sections inside a project's backlog. A header sits above each section's tasks in the backlog panel; drag a task under another header to move it there. Sections and memberships are stored by the plugin; the app's tasks are only reordered, never changed.",
+    "LOADING": "Loading…",
+    "STATUS": {
+      "SAVED": "Saved.",
+      "SAVE_FAILED": "Saving failed: {{error}}",
+      "LOAD_FAILED": "The settings could not be loaded: {{error}}"
+    },
+    "PROJECT": {
+      "LABEL": "Project",
+      "NO_PROJECTS": "No projects yet.",
+      "BACKLOG_OFF": "The backlog is switched off for this project (project settings → Enable backlog). Sections are kept but not shown until it is on.",
+      "BACKLOG_EMPTY": "This backlog is empty."
+    },
+    "SECTIONS": {
+      "HEADING": "Sections",
+      "HINT": "In this order from the top of the backlog; tasks without a section come last.",
+      "EMPTY": "No sections yet for this project.",
+      "NAME_PLACEHOLDER": "Section name",
+      "ADD": "Add section",
+      "NEW_NAME": "New section",
+      "UNNAMED": "Unnamed section",
+      "UP": "Move up",
+      "DOWN": "Move down",
+      "DELETE": "Delete",
+      "DELETE_CONFIRM_TITLE": "Delete section?",
+      "DELETE_CONFIRM_BODY": "The section \"{{name}}\" is removed. Its {{count}} tasks stay in the backlog, without a section.",
+      "COUNT_ONE": "1 task",
+      "COUNT_MANY": "{{count}} tasks"
+    },
+    "TASKS": {
+      "HEADING": "Backlog tasks",
+      "HINT": "Put a task in a section here, or drag it under the section's header in the backlog panel.",
+      "NO_SECTION": "No section",
+      "SECTION_LABEL": "Section of \"{{title}}\""
+    },
+    "OPTIONS": {
+      "HEADING": "Behaviour",
+      "HEADER_BUTTON": "Show the Backlog sections button in the app header",
+      "HEADER_BUTTON_HINT": "The button appears in project views and opens this page for the current project. A change takes effect after the app restarts."
+    },
+    "BUTTONS": {
+      "CANCEL": "Cancel",
+      "DELETE": "Delete"
+    }
+  }
+}

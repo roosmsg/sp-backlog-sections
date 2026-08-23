@@ -1,0 +1,58 @@
+{
+  "PLUGIN": {
+    "NAME": "Backlogsecties"
+  },
+  "BACKGROUND": {
+    "NO_SECTION": "Zonder sectie",
+    "HEADER_BUTTON": "Backlogsecties",
+    "COLLAPSE": "Sectie invouwen",
+    "EXPAND": "Sectie uitvouwen"
+  },
+  "UI": {
+    "TITLE": "Backlogsecties",
+    "INTRO": "Benoemde secties in de backlog van een project. Boven de taken van elke sectie staat een kop in het backlogpaneel; sleep een taak onder een andere kop om haar daarheen te verplaatsen. Secties en lidmaatschappen bewaart de plugin zelf; de taken van de app worden alleen herordend, nooit gewijzigd.",
+    "LOADING": "Laden…",
+    "STATUS": {
+      "SAVED": "Opgeslagen.",
+      "SAVE_FAILED": "Opslaan mislukt: {{error}}",
+      "LOAD_FAILED": "De instellingen konden niet worden geladen: {{error}}"
+    },
+    "PROJECT": {
+      "LABEL": "Project",
+      "NO_PROJECTS": "Nog geen projecten.",
+      "BACKLOG_OFF": "De backlog staat uit voor dit project (projectinstellingen → Backlog inschakelen). De secties blijven bewaard maar worden pas getoond als hij aanstaat.",
+      "BACKLOG_EMPTY": "Deze backlog is leeg."
+    },
+    "SECTIONS": {
+      "HEADING": "Secties",
+      "HINT": "In deze volgorde van boven naar beneden in de backlog; taken zonder sectie komen achteraan.",
+      "EMPTY": "Nog geen secties voor dit project.",
+      "NAME_PLACEHOLDER": "Naam van de sectie",
+      "ADD": "Sectie toevoegen",
+      "NEW_NAME": "Nieuwe sectie",
+      "UNNAMED": "Naamloze sectie",
+      "UP": "Omhoog",
+      "DOWN": "Omlaag",
+      "DELETE": "Verwijderen",
+      "DELETE_CONFIRM_TITLE": "Sectie verwijderen?",
+      "DELETE_CONFIRM_BODY": "De sectie \"{{name}}\" wordt verwijderd. Haar {{count}} taken blijven in de backlog staan, zonder sectie.",
+      "COUNT_ONE": "1 taak",
+      "COUNT_MANY": "{{count}} taken"
+    },
+    "TASKS": {
+      "HEADING": "Backlogtaken",
+      "HINT": "Zet een taak hier in een sectie, of sleep haar in het backlogpaneel onder de kop van de sectie.",
+      "NO_SECTION": "Zonder sectie",
+      "SECTION_LABEL": "Sectie van \"{{title}}\""
+    },
+    "OPTIONS": {
+      "HEADING": "Gedrag",
+      "HEADER_BUTTON": "Toon de knop Backlogsecties in de kopbalk van de app",
+      "HEADER_BUTTON_HINT": "De knop verschijnt in projectweergaven en opent deze pagina voor het huidige project. Een wijziging gaat in na een herstart van de app."
+    },
+    "BUTTONS": {
+      "CANCEL": "Annuleren",
+      "DELETE": "Verwijderen"
+    }
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "backlog-sections",
+  "name": "Backlog Sections",
+  "version": "1.0.0",
+  "manifestVersion": 1,
+  "minSupVersion": "18.19.0",
+  "description": "Named sections inside a project backlog: headers with task counts and collapse in the backlog panel; drag a task under a header to move it there.",
+  "icon": "icon.svg",
+  "iFrame": true,
+  "sidePanel": false,
+  "isSkipMenuEntry": true,
+  "type": "standard",
+  "hooks": [
+    "projectListUpdate",
+    "action",
+    "workContextChange",
+    "persistedDataChanged"
+  ],
+  "permissions": [
+    "getAllProjects",
+    "updateProject",
+    "getTasks",
+    "getActiveWorkContext",
+    "persistDataSynced",
+    "loadSyncedData",
+    "openDialog",
+    "showIndexHtmlAsView",
+    "registerWorkContextHeaderButton",
+    "registerConfigHandler"
+  ],
+  "i18n": {
+    "languages": [
+      "en",
+      "nl"
+    ]
+  }
+}

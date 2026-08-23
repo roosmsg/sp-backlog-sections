@@ -1,0 +1,664 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Backlog Sections</title>
+    <style>
+      /* The host injects its theme variables and UI kit before this block. */
+      body {
+        margin: 0;
+        padding: var(--s2, 16px) var(--s2, 16px) var(--s4, 32px);
+        max-width: 56rem;
+        margin-left: auto;
+        margin-right: auto;
+        font-family: var(--font-primary-stack, sans-serif);
+        color: var(--text-color, inherit);
+        background: transparent;
+      }
+      h1 {
+        font-size: 1.5rem;
+        margin: 0 0 var(--s-half, 4px);
+      }
+      h2 {
+        font-size: 1.1rem;
+        margin: 0 0 var(--s, 8px);
+      }
+      p {
+        margin: 0 0 var(--s, 8px);
+        line-height: 1.45;
+      }
+      section {
+        margin-top: var(--s3, 24px);
+      }
+      .card {
+        padding: var(--s2, 16px);
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s, 8px);
+        align-items: center;
+        margin-top: var(--s, 8px);
+      }
+      .row > input[type='text'],
+      .row > select {
+        flex: 1 1 12rem;
+        min-width: 0;
+      }
+      .hint {
+        font-size: 0.85rem;
+        color: var(--text-color-muted, #888);
+      }
+      .danger {
+        color: var(--c-warn, #c33);
+      }
+      .option {
+        display: flex;
+        gap: var(--s, 8px);
+        align-items: flex-start;
+        margin: 0 0 var(--s, 8px);
+      }
+      .option input {
+        margin-top: 4px;
+      }
+      .option label {
+        cursor: pointer;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s, 8px);
+        align-items: center;
+        margin-top: var(--s2, 16px);
+      }
+      .section-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s, 8px);
+        align-items: center;
+        padding: var(--s-half, 4px) 0;
+        border-bottom: 1px solid var(--divider-color, #ddd);
+      }
+      .section-row .section-name {
+        flex: 1 1 14rem;
+        min-width: 0;
+        font-weight: 600;
+      }
+      .section-row .count {
+        flex: none;
+        font-size: 0.85rem;
+        color: var(--text-color-muted, #888);
+        min-width: 4em;
+      }
+      .task-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--s, 8px);
+        align-items: center;
+        padding: var(--s-half, 4px) 0;
+        border-bottom: 1px solid var(--divider-color, #ddd);
+      }
+      .task-row .task-title {
+        flex: 1 1 16rem;
+        min-width: 0;
+      }
+      .task-row select {
+        flex: 0 1 14rem;
+        min-width: 8rem;
+      }
+      #status {
+        margin-top: var(--s2, 16px);
+        min-height: 1.4em;
+        font-size: 0.9rem;
+      }
+      #status.error {
+        color: var(--c-warn, #c33);
+      }
+      button[disabled] {
+        opacity: 0.6;
+        cursor: default;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app"><p class="hint">Loading…</p></div>
+    <div id="status" role="status" aria-live="polite"></div>
+
+    <script>
+      /* @@CORE@@ */
+    </script>
+    <script>
+      (function () {
+        'use strict';
+
+        // Resolved once the host has injected window.PluginAPI — see the bottom.
+        var api = null;
+        var core = BacklogSectionsCore;
+
+        // Every UI string is fetched once through the host's translate(), which
+        // returns a Promise in the iframe; the embedded English carries the keys.
+        var KEYS = core.flattenKeys(BacklogSectionsEnglish, '').filter(function (key) {
+          return key.indexOf('UI.') === 0;
+        });
+
+        var state = {
+          strings: {},
+          config: core.createDefaultConfig(),
+          projects: [],
+          tasks: [],
+          projectId: null,
+        };
+
+        var appEl = document.getElementById('app');
+        var statusEl = document.getElementById('status');
+
+        // ---- helpers ---------------------------------------------------------
+
+        // Strings come from the host in the app language; a key the host could
+        // not translate comes back as the key itself and falls back to English.
+        function t(key, params) {
+          var text = state.strings[key];
+          if (typeof text !== 'string' || text === key) {
+            text = core.lookup(BacklogSectionsEnglish, key);
+          }
+          return core.interpolate(text, params);
+        }
+
+        function escapeHtml(text) {
+          return String(text).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+          });
+        }
+
+        function errorText(error) {
+          return error && error.message ? error.message : String(error);
+        }
+
+        function el(tag, attrs, children) {
+          var node = document.createElement(tag);
+          if (attrs) {
+            Object.keys(attrs).forEach(function (name) {
+              var value = attrs[name];
+              if (value === null || value === undefined || value === false) {
+                return;
+              }
+              if (name === 'text') {
+                node.textContent = value;
+              } else if (name === 'className') {
+                node.className = value;
+              } else if (name.slice(0, 2) === 'on') {
+                node.addEventListener(name.slice(2), value);
+              } else if (name === 'checked' || name === 'disabled' || name === 'selected') {
+                node[name] = !!value;
+              } else if (name === 'value') {
+                node.value = value;
+              } else {
+                node.setAttribute(name, value);
+              }
+            });
+          }
+          (children || []).forEach(function (child) {
+            if (child === null || child === undefined || child === false) {
+              return;
+            }
+            node.appendChild(typeof child === 'string' ? document.createTextNode(child) : child);
+          });
+          return node;
+        }
+
+        function setStatus(text, isError) {
+          statusEl.textContent = text || '';
+          statusEl.className = isError ? 'error' : '';
+        }
+
+        function currentProject() {
+          for (var i = 0; i < state.projects.length; i++) {
+            if (state.projects[i].id === state.projectId) {
+              return state.projects[i];
+            }
+          }
+          return null;
+        }
+
+        function projectConfig() {
+          return core.getProject(state.config, state.projectId);
+        }
+
+        function editableProjectConfig() {
+          return core.ensureProject(state.config, state.projectId);
+        }
+
+        function backlogOrder() {
+          var project = currentProject();
+          return project && Array.isArray(project.backlogTaskIds) ? project.backlogTaskIds : [];
+        }
+
+        function taskById(id) {
+          for (var i = 0; i < state.tasks.length; i++) {
+            if (state.tasks[i].id === id) {
+              return state.tasks[i];
+            }
+          }
+          return null;
+        }
+
+        function sectionName(section) {
+          return section.name || t('UI.SECTIONS.UNNAMED');
+        }
+
+        function countText(count) {
+          return t(count === 1 ? 'UI.SECTIONS.COUNT_ONE' : 'UI.SECTIONS.COUNT_MANY', { count: count });
+        }
+
+        // ---- data ------------------------------------------------------------
+
+        function loadStrings() {
+          return Promise.all(
+            KEYS.map(function (key) {
+              return Promise.resolve()
+                .then(function () {
+                  return api.translate(key);
+                })
+                .catch(function () {
+                  return key;
+                });
+            })
+          ).then(function (values) {
+            KEYS.forEach(function (key, i) {
+              state.strings[key] = typeof values[i] === 'string' ? values[i] : key;
+            });
+          });
+        }
+
+        function loadConfig() {
+          return api.loadSyncedData().then(function (raw) {
+            state.config = core.normalizeConfig(raw);
+          });
+        }
+
+        function loadProjectsAndTasks() {
+          return Promise.all([api.getAllProjects(), api.getTasks()]).then(function (results) {
+            state.projects = (Array.isArray(results[0]) ? results[0] : []).filter(function (p) {
+              return p && typeof p.id === 'string';
+            });
+            state.tasks = Array.isArray(results[1]) ? results[1] : [];
+          });
+        }
+
+        function chooseInitialProject() {
+          var ctxPromise =
+            typeof api.getActiveWorkContext === 'function'
+              ? Promise.resolve()
+                  .then(function () {
+                    return api.getActiveWorkContext();
+                  })
+                  .catch(function () {
+                    return null;
+                  })
+              : Promise.resolve(null);
+          return ctxPromise.then(function (ctx) {
+            var active = ctx && ctx.type === 'PROJECT' ? ctx.id : null;
+            if (active && currentProjectById(active)) {
+              state.projectId = active;
+            } else if (state.projects.length) {
+              state.projectId = state.projects[0].id;
+            }
+          });
+        }
+
+        function currentProjectById(id) {
+          for (var i = 0; i < state.projects.length; i++) {
+            if (state.projects[i].id === id) {
+              return state.projects[i];
+            }
+          }
+          return null;
+        }
+
+        // Normalising before every write keeps the stored shape canonical; the
+        // background script reloads it and enforces the order.
+        function save() {
+          state.config = core.normalizeConfig(state.config);
+          return api
+            .persistDataSynced(JSON.stringify(state.config))
+            .then(function () {
+              setStatus(t('UI.STATUS.SAVED'));
+            })
+            .catch(function (error) {
+              setStatus(t('UI.STATUS.SAVE_FAILED', { error: errorText(error) }), true);
+            });
+        }
+
+        function saveAndRender() {
+          return save().then(render);
+        }
+
+        // ---- actions ---------------------------------------------------------
+
+        function selectProject(projectId) {
+          state.projectId = projectId;
+          render();
+        }
+
+        function addSection(name) {
+          var trimmed = (name || '').trim() || t('UI.SECTIONS.NEW_NAME');
+          editableProjectConfig().sections.push({ id: core.newSectionId(), name: trimmed });
+          return saveAndRender();
+        }
+
+        function renameSection(section, name) {
+          var trimmed = name.trim();
+          if (trimmed === section.name) {
+            return Promise.resolve();
+          }
+          section.name = trimmed;
+          return saveAndRender();
+        }
+
+        function moveSection(section, delta) {
+          var sections = editableProjectConfig().sections;
+          var index = sections.indexOf(section);
+          var target = index + delta;
+          if (index < 0 || target < 0 || target >= sections.length) {
+            return Promise.resolve();
+          }
+          sections.splice(index, 1);
+          sections.splice(target, 0, section);
+          return saveAndRender();
+        }
+
+        function confirmDialog(title, body, confirmLabel) {
+          if (typeof api.openDialog !== 'function') {
+            return Promise.resolve(window.confirm(body));
+          }
+          return api
+            .openDialog({
+              title: title,
+              htmlContent: '<p>' + escapeHtml(body) + '</p>',
+              buttons: [
+                { label: t('UI.BUTTONS.CANCEL') },
+                { label: confirmLabel, color: 'warn', raised: true },
+              ],
+            })
+            .then(function (result) {
+              return result === confirmLabel;
+            })
+            .catch(function () {
+              return window.confirm(body);
+            });
+        }
+
+        function deleteSection(section) {
+          var project = projectConfig();
+          var count = Object.keys(project.membership).filter(function (taskId) {
+            return project.membership[taskId] === section.id;
+          }).length;
+          return confirmDialog(
+            t('UI.SECTIONS.DELETE_CONFIRM_TITLE'),
+            t('UI.SECTIONS.DELETE_CONFIRM_BODY', { name: sectionName(section), count: count }),
+            t('UI.BUTTONS.DELETE')
+          ).then(function (confirmed) {
+            if (!confirmed) {
+              return;
+            }
+            var editable = editableProjectConfig();
+            editable.sections = editable.sections.filter(function (s) {
+              return s.id !== section.id;
+            });
+            Object.keys(editable.membership).forEach(function (taskId) {
+              if (editable.membership[taskId] === section.id) {
+                delete editable.membership[taskId];
+              }
+            });
+            return saveAndRender();
+          });
+        }
+
+        function setTaskSection(taskId, sectionId) {
+          var editable = editableProjectConfig();
+          if (sectionId) {
+            editable.membership[taskId] = sectionId;
+          } else {
+            delete editable.membership[taskId];
+          }
+          return saveAndRender();
+        }
+
+        function setHeaderButton(value) {
+          state.config.headerButton = !!value;
+          return saveAndRender();
+        }
+
+        // ---- rendering -------------------------------------------------------
+
+        function renderProjectPicker() {
+          var select = el(
+            'select',
+            {
+              'aria-label': t('UI.PROJECT.LABEL'),
+              onchange: function (event) {
+                selectProject(event.target.value);
+              },
+            },
+            state.projects.map(function (project) {
+              return el('option', { value: project.id, text: project.title || project.id });
+            })
+          );
+          select.value = state.projectId || '';
+          return el('div', { className: 'row', style: 'margin-top: 0' }, [el('span', { className: 'hint', text: t('UI.PROJECT.LABEL') }), select]);
+        }
+
+        function renderSections() {
+          var project = projectConfig();
+          var order = backlogOrder();
+          var counts = {};
+          order.forEach(function (taskId) {
+            var sectionId = core.sectionOf(project, taskId);
+            if (sectionId) {
+              counts[sectionId] = (counts[sectionId] || 0) + 1;
+            }
+          });
+          var rows = project.sections.map(function (section, index) {
+            return el('div', { className: 'section-row' }, [
+              el('input', {
+                type: 'text',
+                className: 'section-name',
+                value: section.name,
+                placeholder: t('UI.SECTIONS.UNNAMED'),
+                'aria-label': t('UI.SECTIONS.NAME_PLACEHOLDER'),
+                onchange: function (event) {
+                  renameSection(section, event.target.value);
+                },
+              }),
+              el('span', { className: 'count', text: countText(counts[section.id] || 0) }),
+              el('button', {
+                type: 'button',
+                text: '↑',
+                title: t('UI.SECTIONS.UP'),
+                'aria-label': t('UI.SECTIONS.UP'),
+                disabled: index === 0,
+                onclick: function () {
+                  moveSection(section, -1);
+                },
+              }),
+              el('button', {
+                type: 'button',
+                text: '↓',
+                title: t('UI.SECTIONS.DOWN'),
+                'aria-label': t('UI.SECTIONS.DOWN'),
+                disabled: index === project.sections.length - 1,
+                onclick: function () {
+                  moveSection(section, 1);
+                },
+              }),
+              el('button', {
+                type: 'button',
+                className: 'danger',
+                text: t('UI.SECTIONS.DELETE'),
+                onclick: function () {
+                  deleteSection(section);
+                },
+              }),
+            ]);
+          });
+          var input = el('input', {
+            type: 'text',
+            placeholder: t('UI.SECTIONS.NAME_PLACEHOLDER'),
+            'aria-label': t('UI.SECTIONS.NAME_PLACEHOLDER'),
+            onkeydown: function (event) {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                addSection(input.value);
+              }
+            },
+          });
+          return el('section', { className: 'card' }, [
+            el('h2', { text: t('UI.SECTIONS.HEADING') }),
+            el('p', { className: 'hint', text: t('UI.SECTIONS.HINT') }),
+            rows.length ? el('div', null, rows) : el('p', { className: 'hint', text: t('UI.SECTIONS.EMPTY') }),
+            el('div', { className: 'row' }, [
+              input,
+              el('button', {
+                type: 'button',
+                className: 'btn-primary',
+                text: t('UI.SECTIONS.ADD'),
+                onclick: function () {
+                  addSection(input.value);
+                },
+              }),
+            ]),
+          ]);
+        }
+
+        function renderTasks() {
+          var project = projectConfig();
+          var order = backlogOrder();
+          var children = [el('h2', { text: t('UI.TASKS.HEADING') }), el('p', { className: 'hint', text: t('UI.TASKS.HINT') })];
+          var projectEntity = currentProject();
+          if (projectEntity && projectEntity.isEnableBacklog === false) {
+            children.push(el('p', { className: 'hint', text: t('UI.PROJECT.BACKLOG_OFF') }));
+          }
+          if (!order.length) {
+            children.push(el('p', { className: 'hint', text: t('UI.PROJECT.BACKLOG_EMPTY') }));
+            return el('section', { className: 'card' }, children);
+          }
+          var rows = order.map(function (taskId) {
+            var task = taskById(taskId);
+            var title = task ? task.title : taskId;
+            var select = el(
+              'select',
+              {
+                'aria-label': t('UI.TASKS.SECTION_LABEL', { title: title }),
+                'data-task-id': taskId,
+                onchange: function (event) {
+                  setTaskSection(taskId, event.target.value);
+                },
+              },
+              [el('option', { value: '', text: t('UI.TASKS.NO_SECTION') })].concat(
+                project.sections.map(function (section) {
+                  return el('option', { value: section.id, text: sectionName(section) });
+                })
+              )
+            );
+            select.value = core.sectionOf(project, taskId) || '';
+            return el('div', { className: 'task-row' }, [el('span', { className: 'task-title', text: title }), select]);
+          });
+          children.push(el('div', null, rows));
+          return el('section', { className: 'card' }, children);
+        }
+
+        function renderOptions() {
+          var id = 'opt-header-button';
+          return el('section', { className: 'card' }, [
+            el('h2', { text: t('UI.OPTIONS.HEADING') }),
+            el('div', { className: 'option' }, [
+              el('input', {
+                type: 'checkbox',
+                id: id,
+                checked: state.config.headerButton,
+                onchange: function (event) {
+                  setHeaderButton(event.target.checked);
+                },
+              }),
+              el('div', null, [
+                el('label', { for: id, text: t('UI.OPTIONS.HEADER_BUTTON') }),
+                el('div', { className: 'hint', text: t('UI.OPTIONS.HEADER_BUTTON_HINT') }),
+              ]),
+            ]),
+          ]);
+        }
+
+        function render() {
+          var body = [el('h1', { text: t('UI.TITLE') }), el('p', { className: 'hint', text: t('UI.INTRO') })];
+          if (!state.projects.length) {
+            body.push(el('p', { text: t('UI.PROJECT.NO_PROJECTS') }));
+          } else {
+            body.push(renderProjectPicker());
+            body.push(renderSections());
+            body.push(renderTasks());
+          }
+          body.push(renderOptions());
+          appEl.innerHTML = '';
+          appEl.appendChild(el('div', null, body));
+        }
+
+        // ---- start -----------------------------------------------------------
+
+        function start() {
+          return loadStrings()
+            .then(function () {
+              appEl.textContent = t('UI.LOADING');
+              return Promise.all([loadConfig(), loadProjectsAndTasks()]);
+            })
+            .then(chooseInitialProject)
+            .then(render)
+            .catch(function (error) {
+              console.error('[backlog-sections] The settings page could not load.', error);
+              setStatus(t('UI.STATUS.LOAD_FAILED', { error: errorText(error) }), true);
+              appEl.textContent = '';
+            });
+        }
+
+        /*
+         * Hosts before 18.20.1 inject the PluginAPI bridge script at the end of
+         * <body>, after this script; newer hosts inject it in <head>. Polling
+         * covers both.
+         */
+        var API_POLL_MS = 50;
+        var API_WAIT_LIMIT_MS = 15000;
+
+        function whenApiAvailable(callback) {
+          var waited = 0;
+          (function poll() {
+            var candidate = window.PluginAPI;
+            if (candidate && typeof candidate.translate === 'function') {
+              callback(candidate);
+              return;
+            }
+            waited += API_POLL_MS;
+            if (waited >= API_WAIT_LIMIT_MS) {
+              callback(null);
+              return;
+            }
+            setTimeout(poll, API_POLL_MS);
+          })();
+        }
+
+        whenApiAvailable(function (found) {
+          if (!found) {
+            console.error('[backlog-sections] window.PluginAPI never appeared; the host did not inject the plugin bridge.');
+            setStatus(t('UI.STATUS.LOAD_FAILED', { error: 'PluginAPI unavailable' }), true);
+            appEl.textContent = '';
+            return;
+          }
+          api = found;
+          if (typeof api.onReady === 'function') {
+            api.onReady(start);
+          } else {
+            start();
+          }
+        });
+      })();
+    </script>
+  </body>
+</html>
