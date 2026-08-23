@@ -20,6 +20,11 @@ Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same toolin
     the drag shows ▾/aria-expanded=true (fillHeader uses the effective
     open state, not the stored one) — live report was that the arrow never
     turned down.
+  - **Confirmed working live by the user (2026-08-23)**: dropping a task
+    on a collapsed section header assigns the section without expanding
+    anything. This also validates the whole header-drop chain (band
+    tracking, dropOnHeader, the own pass) against the real app for the
+    first time.
   - **Unload cancels pending timers** (later()/cancelPending wrappers for
     reapplySoon, hover-open, the own drop pass; the due sweep interval gets
     a handle). Production hygiene, and it fixed cross-test pollution where a
