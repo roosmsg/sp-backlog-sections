@@ -615,6 +615,45 @@ test('headers: collapse hides the rows of the section, is remembered per device,
   });
 });
 
+test('the project-updated snack of an own write is hidden, foreign ones stay', async () => {
+  await withHostDom(['b2', 'u1', 'a1', 'b1', 'a2'], async (doc) => {
+    // Start-up enforcement performs a write: the stamp is fresh.
+    const host = await startHost({ projects: projects(['b2', 'u1', 'a1', 'b1', 'a2']) });
+    assert.strictEqual(host.writes().length, 1, 'the write that raises the snack');
+
+    const snack = doc.createElement('mat-snack-bar-container');
+    const message = doc.createElement('div');
+    message.textContent = 'Bijgewerkte projectinstellingen';
+    snack.appendChild(message);
+    doc.body.appendChild(snack);
+    FakeMutationObserver.instances[0].trigger([
+      { type: 'childList', target: doc.body, addedNodes: [snack], removedNodes: [] },
+    ]);
+    assert.strictEqual(snack.getAttribute('data-backlog-sections-suppressed'), '1', 'own snack hidden');
+
+    // A snack with any other text is none of our business.
+    const other = doc.createElement('mat-snack-bar-container');
+    other.textContent = 'Taak aangemaakt';
+    doc.body.appendChild(other);
+    FakeMutationObserver.instances[0].trigger([
+      { type: 'childList', target: doc.body, addedNodes: [other], removedNodes: [] },
+    ]);
+    assert.strictEqual(other.getAttribute('data-backlog-sections-suppressed'), null, 'foreign snack untouched');
+  });
+
+  // Without a recent own write the same snack stays visible.
+  await withHostDom(ORDER, async (doc) => {
+    await startHost();
+    const snack = doc.createElement('mat-snack-bar-container');
+    snack.textContent = 'Updated project settings';
+    doc.body.appendChild(snack);
+    FakeMutationObserver.instances[0].trigger([
+      { type: 'childList', target: doc.body, addedNodes: [snack], removedNodes: [] },
+    ]);
+    assert.strictEqual(snack.getAttribute('data-backlog-sections-suppressed'), null, 'no own write: snack stays');
+  });
+});
+
 test('headers: a collapsed section stays collapsed while a drag runs', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();

@@ -4,7 +4,22 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.14.0)
+## What exists (2026-08-23, v2.15.0)
+
+- v2.15.0 (user report 2026-08-23): the host pops a **"Updated project
+  settings" snack on every updateProject** — project.effects.ts only skips
+  it for actions carrying isSkipSnack, and the plugin bridge
+  (ProjectService.update) never sets that flag, so every backlog reorder
+  raised one. The plugin now hides its own snack: both updateProject call
+  sites stamp lastOwnWriteAt, and the body MutationObserver (already
+  watching for the backlog) marks a freshly added element whose text
+  contains the EN/NL translation of T.F.PROJECT.S.UPDATED — walking up at
+  most 8 levels to a *snack* container — with
+  data-backlog-sections-suppressed, which the injected stylesheet hides,
+  but only within 3 s of an own write. Foreign snacks and other texts stay.
+  Other UI languages than EN/NL would still show the snack (text list:
+  SNACK_SUPPRESS_TEXTS). The clean fix would be upstream: let the bridge
+  pass isSkipSnack.
 
 - v2.14.0 (user request 2026-08-23, after confirming v2.13.0 live): the
   spring-open behaviour is REMOVED again — a collapsed section stays

@@ -263,6 +263,7 @@
       lastOrder[projectId] = remaining;
       return saveConfig()
         .then(function () {
+          lastOwnWriteAt = Date.now();
           return api.updateProject(projectId, { taskIds: newRegular, backlogTaskIds: remaining });
         })
         .catch(function (error) {
@@ -403,6 +404,7 @@
         work = work.then(function () {
           return Promise.resolve()
             .then(function () {
+              lastOwnWriteAt = Date.now();
               return api.updateProject(projectId, { backlogTaskIds: desired });
             })
             .catch(function (error) {
@@ -556,6 +558,7 @@
    * sections hide their rows; that state is per device (localStorage).
    */
   var STYLE_ID = 'backlog-sections-style';
+  var SUPPRESSED_CSS = '[data-backlog-sections-suppressed]{display:none !important;}';
   var HEADER_CLASS = 'backlog-sections-header';
   var HEADER_ATTR = 'data-backlog-sections-header';
   var HIDDEN_ATTR = 'data-backlog-sections-hidden';
@@ -637,6 +640,7 @@
     var style = doc.createElement('style');
     style.id = STYLE_ID;
     style.textContent =
+      SUPPRESSED_CSS +
       '.' + HEADER_CLASS + ' { display: flex; align-items: center; gap: 12px; margin: 20px 4px 6px; padding: 10px 10px 10px 6px;' +
       ' min-height: 40px; box-sizing: border-box;' +
       ' border-top: 1px solid var(--divider-color, rgba(128,128,128,.35)); font-size: 1.2rem; font-weight: 600;' +
@@ -1138,7 +1142,61 @@
     return !!(el && typeof el.closest === 'function' && el.closest('[' + HEADER_ATTR + ']'));
   }
 
+  /*
+   * The host pops a "Updated project settings" snack on every updateProject —
+   * the bridge gives plugins no way to pass the action's isSkipSnack flag —
+   * so each backlog reorder this plugin writes raises one. The snack of an
+   * own write is recognised (right text, right moment) and hidden before it
+   * is seen. Foreign project updates keep their snack: outside the window
+   * nothing is touched.
+   */
+  var SNACK_SUPPRESS_TEXTS = ['Updated project settings', 'Bijgewerkte projectinstellingen'];
+  var SNACK_SUPPRESS_WINDOW_MS = 3000;
+  var SUPPRESSED_ATTR = 'data-backlog-sections-suppressed';
+  var lastOwnWriteAt = 0;
+
+  function snackContainerOf(node) {
+    var current = node;
+    for (var depth = 0; current && depth < 8; depth++) {
+      var tag = typeof current.tagName === 'string' ? current.tagName.toLowerCase() : '';
+      var cls = typeof current.className === 'string' ? current.className.toLowerCase() : '';
+      if (tag.indexOf('snack') !== -1 || cls.indexOf('snack') !== -1) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return null;
+  }
+
+  function suppressOwnSnack(mutations) {
+    if (Date.now() - lastOwnWriteAt > SNACK_SUPPRESS_WINDOW_MS) {
+      return;
+    }
+    for (var i = 0; i < mutations.length; i++) {
+      var added = mutations[i].addedNodes || [];
+      for (var j = 0; j < added.length; j++) {
+        var node = added[j];
+        if (!node || node.nodeType !== 1 || typeof node.textContent !== 'string') {
+          continue;
+        }
+        var text = node.textContent;
+        for (var k = 0; k < SNACK_SUPPRESS_TEXTS.length; k++) {
+          if (text.indexOf(SNACK_SUPPRESS_TEXTS[k]) === -1) {
+            continue;
+          }
+          var container = snackContainerOf(node);
+          if (container && typeof container.setAttribute === 'function') {
+            container.setAttribute(SUPPRESSED_ATTR, '1');
+            debug('suppressed own project-update snack');
+          }
+          break;
+        }
+      }
+    }
+  }
+
   function onMutations(mutations) {
+    suppressOwnSnack(mutations);
     // Mutations caused by the headers themselves need no second pass.
     var foreign = false;
     for (var i = 0; i < mutations.length && !foreign; i++) {
