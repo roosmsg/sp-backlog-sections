@@ -43,7 +43,9 @@ Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same toolin
 - Not yet installed live. CDK drag-and-drop shifts only item elements during
   a drag; the injected headers stay put until the drop re-renders — visual
   behaviour during the drag is unverified.
-- No GitHub repo yet (user decides); release workflow to be added like Tag
-  Groups' when the repo exists.
+- Git: private GitHub repo https://github.com/roosmsg/super-productivity-backlog-sections
+  (branch main); release v1.0.0 published by hand with the two ZIPs; the
+  release workflow (.github/workflows/release.yml) handles tags v* from here.
+  Commits/pushes on the user's request only.
 - Not in v1: nested sections, quick-add on a header, inline rename, sections
   outside the backlog.
