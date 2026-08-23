@@ -4,7 +4,18 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.11.0)
+## What exists (2026-08-23, v2.12.0)
+
+- v2.12.0 (user report: v2.11.0's open-everything-on-drag is unusable with a
+  large backlog): **spring-loaded sections**. During a drag everything stays
+  folded; a collapsed section opens only after the pointer has rested on its
+  band for HOVER_OPEN_MS (500 ms), stays open for the rest of the drag, and
+  everything folds back on release (reapplySoon, only when something was
+  opened; the hover timer is cancelled on drag end). A quick release on the
+  collapsed header still needs no waiting — the header drop assigns the
+  section directly. Driven from onDragMove via scheduleHoverOpen(targetHeader);
+  state: dragOpenKeys / hoverOpenTimer / hoverOpenKey. Stored collapse state
+  is never touched. Not yet verified live.
 
 - v2.11.0 (user report 2026-08-23: dropping into a collapsed section is
   hard — its band is one header tall and the CDK sorts against hidden rows):

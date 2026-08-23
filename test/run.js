@@ -603,7 +603,7 @@ test('headers: collapse hides the rows of the section, is remembered per device,
   });
 });
 
-test('headers: a collapsed section opens while a drag runs and folds back after', async () => {
+test('headers: a collapsed section springs open under a resting drag and folds back after', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();
     const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
@@ -612,17 +612,23 @@ test('headers: a collapsed section opens while a drag runs and folds back after'
       doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
     assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
 
-    // The CDK placeholder appears: the drag is on, the rows open up.
+    // The CDK placeholder appears: the drag is on — and with a large backlog
+    // in mind, everything STAYS folded until the pointer rests somewhere.
     const placeholder = doc.createElement('task');
     placeholder.className = 'cdk-drag-placeholder';
     placeholder.setAttribute('data-task-id', 'u1');
     doc.backlogList.appendChild(placeholder);
     FakeMutationObserver.instances[0].trigger();
-    assert.deepStrictEqual(hidden(), [], 'during the drag every row is visible');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'a drag alone opens nothing');
 
-    // Release over the collapsed section's header: the drop still lands there.
+    // The pointer rests on the collapsed section's band: it springs open.
     layout(doc.backlogList);
     doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'not before the rest delay');
+    await sleep(650);
+    assert.deepStrictEqual(hidden(), [], 'sprung open under the resting pointer');
+
+    // Release there: the drop lands in the section.
     doc.dispatch('pointerup', {});
     doc.backlogList.removeChild(placeholder);
     await host.userDragsInBacklog('p1', 'u1', ['a1', 'a2', 'u1', 'b1', 'b2']);
@@ -631,6 +637,29 @@ test('headers: a collapsed section opens while a drag runs and folds back after'
     // The refold is scheduled; after it fires the rows are hidden again.
     await sleep(300);
     assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'folded back after the drag, with the new member inside');
+  });
+});
+
+test('headers: a quick release on a collapsed header needs no waiting', async () => {
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const placeholder = doc.createElement('task');
+    placeholder.className = 'cdk-drag-placeholder';
+    placeholder.setAttribute('data-task-id', 'u1');
+    doc.backlogList.appendChild(placeholder);
+    FakeMutationObserver.instances[0].trigger();
+    layout(doc.backlogList);
+    // Straight to the header and release, faster than the spring delay.
+    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
+    doc.dispatch('pointerup', {});
+    doc.backlogList.removeChild(placeholder);
+    await host.userDragsInBacklog('p1', 'u1', ['a1', 'a2', 'u1', 'b1', 'b2']);
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'never opened, still folded, member inside');
   });
 });
 
