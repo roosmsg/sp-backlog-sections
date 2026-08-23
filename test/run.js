@@ -615,7 +615,7 @@ test('headers: collapse hides the rows of the section, is remembered per device,
   });
 });
 
-test('headers: a collapsed section springs open under a resting drag and folds back after', async () => {
+test('headers: a collapsed section stays collapsed while a drag runs', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();
     const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
@@ -624,35 +624,25 @@ test('headers: a collapsed section springs open under a resting drag and folds b
       doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
     assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
 
-    // The CDK placeholder appears: the drag is on — and with a large backlog
-    // in mind, everything STAYS folded until the pointer rests somewhere.
+    // A drag starts and the pointer rests on the collapsed band: with a large
+    // backlog in mind nothing opens — the header itself is the drop target.
     const placeholder = doc.createElement('task');
     placeholder.className = 'cdk-drag-placeholder';
     placeholder.setAttribute('data-task-id', 'u1');
     doc.backlogList.appendChild(placeholder);
     FakeMutationObserver.instances[0].trigger();
-    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'a drag alone opens nothing');
-
-    // The pointer rests on the collapsed section's band: it springs open.
     layout(doc.backlogList);
     doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
-    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'not before the rest delay');
-    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron still closed');
+    assert.ok(later.className.includes('bs-target'), 'the header is marked as the drop target');
     await sleep(650);
-    assert.deepStrictEqual(hidden(), [], 'sprung open under the resting pointer');
-    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▾', 'chevron follows the sprung-open state');
-    assert.ok(!later.hasAttribute('data-backlog-sections-collapsed'), 'header no longer marked collapsed');
-
-    // Release there: the drop lands in the section.
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'still folded, even under a resting pointer');
+    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron stays closed');
+    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
     doc.dispatch('pointerup', {});
     doc.backlogList.removeChild(placeholder);
-    await host.userDragsInBacklog('p1', 'u1', ['a1', 'a2', 'u1', 'b1', 'b2']);
-    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'dropped into the collapsed section');
-
-    // The refold is scheduled; after it fires the rows are hidden again.
     await sleep(300);
-    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'folded back after the drag, with the new member inside');
-    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron closed again');
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'released on the band: dropped into the section');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'still folded, member inside');
   });
 });
 

@@ -4,7 +4,18 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.13.0)
+## What exists (2026-08-23, v2.14.0)
+
+- v2.14.0 (user request 2026-08-23, after confirming v2.13.0 live): the
+  spring-open behaviour is REMOVED again — a collapsed section stays
+  collapsed during a drag, full stop. Since the header drop itself works
+  (v2.13.0's own pass), opening the rows served no purpose and the 500 ms
+  hover-open was unwanted. Dropping on the header band is THE way into a
+  collapsed section; the chevron never changes during a drag. The
+  later()/cancelPending timer bookkeeping stays (used by reapplySoon and
+  the own drop pass). Known cosmetic quirk, pre-existing: a decorate pass
+  during a drag rewrites the header class and briefly clears the .bs-target
+  highlight until the next pointermove restores it.
 
 - v2.13.0 (live findings from the user, 2026-08-23) — dropping on a
   collapsed section finally works without expanding anything:

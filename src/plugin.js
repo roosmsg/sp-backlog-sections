@@ -714,11 +714,7 @@
   var COLLAPSED_ATTR = 'data-backlog-sections-collapsed';
 
   function fillHeader(header, projectId, block, project) {
-    var key = sectionKey(block.sectionId);
-    // The effective state: a section sprung open for the running drag shows
-    // as open — arrow down, rows visible — even though its stored state is
-    // still collapsed.
-    var isDown = isCollapsed(projectId, key) && !dragOpenKeys[key];
+    var isDown = isCollapsed(projectId, sectionKey(block.sectionId));
     if (isDown) {
       if (header.getAttribute(COLLAPSED_ATTR) !== '1') {
         header.setAttribute(COLLAPSED_ATTR, '1');
@@ -895,33 +891,6 @@
     return found || highest;
   }
 
-  /*
-   * Rest the pointer on a collapsed section's band for a moment and it opens
-   * for the rest of the drag. Moving on before the timer fires cancels it; a
-   * release on the header itself needs no waiting at all (the header drop
-   * assigns the section directly).
-   */
-  function scheduleHoverOpen(header) {
-    var key = header && typeof header.getAttribute === 'function' ? header.getAttribute(HEADER_ATTR) : null;
-    if (key === hoverOpenKey) {
-      return;
-    }
-    if (hoverOpenTimer) {
-      clearTimeout(hoverOpenTimer);
-      hoverOpenTimer = null;
-    }
-    hoverOpenKey = key;
-    if (!key || dragOpenKeys[key] || !isCollapsed(activeProjectId, key)) {
-      return;
-    }
-    hoverOpenTimer = later(function () {
-      hoverOpenTimer = null;
-      dragOpenKeys[key] = true;
-      debug('hover-opened section', key);
-      decorate();
-    }, HOVER_OPEN_MS);
-  }
-
   function onDragMove(event) {
     var doc = hostDocument();
     var list = doc && doc.querySelector(LIST_SELECTOR);
@@ -936,7 +905,6 @@
       return;
     }
     markTarget(headerAt(list, point.clientX, point.clientY));
-    scheduleHoverOpen(targetHeader);
   }
 
   function onDragEnd() {
@@ -960,17 +928,6 @@
   function stopDragTracking() {
     markTarget(null);
     draggedTaskId = null;
-    if (hoverOpenTimer) {
-      clearTimeout(hoverOpenTimer);
-      hoverOpenTimer = null;
-    }
-    hoverOpenKey = null;
-    // Only when sections were hover-opened for this drag is there anything
-    // to fold again.
-    if (Object.keys(dragOpenKeys).length) {
-      dragOpenKeys = {};
-      reapplySoon();
-    }
     var doc = hostDocument();
     var list = doc && typeof doc.querySelector === 'function' ? doc.querySelector(LIST_SELECTOR) : null;
     if (list && list.className.indexOf(DRAGGING_CLASS) !== -1) {
@@ -1015,14 +972,6 @@
     debug('drag started', draggedTaskId);
   }
 
-  // Spring-loaded sections: during a drag a collapsed section opens only
-  // after the pointer has rested on its band for a moment — with a large
-  // backlog, opening everything at once made the list unmanageable. Opened
-  // sections stay open until the drag ends, then fold back.
-  var HOVER_OPEN_MS = 500;
-  var dragOpenKeys = {};
-  var hoverOpenTimer = null;
-  var hoverOpenKey = null;
   var decorating = false;
   // A pass that keeps asking for another pass would lock up the app. The
   // brake bounds how often the headers may be redrawn; it never trips in
@@ -1106,11 +1055,7 @@
         if (header.nextSibling !== first) {
           list.insertBefore(header, first);
         }
-        // A collapsed section only opens during a drag once the pointer has
-        // rested on it (dragOpenKeys); everything else stays folded, so a
-        // large backlog keeps its size while dragging. The stored collapse
-        // state is untouched.
-        var hide = isCollapsed(activeProjectId, key) && !dragOpenKeys[key];
+        var hide = isCollapsed(activeProjectId, key);
         if (hide) {
           debug('collapse: hiding', key, block.taskIds.length);
         }
