@@ -654,7 +654,7 @@ test('the project-updated snack of an own write is hidden, foreign ones stay', a
   });
 });
 
-test('headers: every section folds while a drag runs and reopens after', async () => {
+test('headers: every section folds while a drag runs and stays folded after (option on)', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();
     const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
@@ -685,12 +685,51 @@ test('headers: every section folds while a drag runs and reopens after', async (
     assert.ok(later.className.includes('bs-target'), 'the header is marked as the drop target');
     doc.dispatch('pointerup', {});
     doc.backlogList.removeChild(placeholder);
+    // The accepting section flashes straight away.
+    assert.ok(later.className.includes('bs-accepted'), 'the accepting header flashes');
     await sleep(300);
     assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'released on the band: dropped into the section');
-    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'stored state is back: only the collapsed section hides, member inside');
+    // Option on (default): every section stays collapsed after the drag.
+    assert.deepStrictEqual(hidden(), ['a1', 'a2', 'b1', 'b2', 'u1'], 'everything stays folded after the drag');
     assert.ok(!doc.backlogList.className.includes('bs-dragging'), 'the drag class is gone');
-    assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▾', 'expanded section open again');
+    assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▸', 'the formerly open section is collapsed now');
+    assert.ok(later.className.includes('bs-accepted'), 'the flash survives the passes right after the drop');
+    await sleep(1400);
+    assert.ok(!later.className.includes('bs-accepted'), 'and fades out afterwards');
   });
+});
+
+test('headers: with the option off, sections reopen to their stored state after a drag', async () => {
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost({ storedConfig: { ...CONFIG, collapseAfterDrag: false } });
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    const next = doc.backlogList.querySelector('[data-backlog-sections-header="next"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    const placeholder = doc.createElement('task');
+    placeholder.className = 'cdk-drag-placeholder';
+    placeholder.setAttribute('data-task-id', 'u1');
+    doc.backlogList.appendChild(placeholder);
+    FakeMutationObserver.instances[0].trigger();
+    layout(doc.backlogList);
+    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
+    doc.dispatch('pointerup', {});
+    doc.backlogList.removeChild(placeholder);
+    await sleep(300);
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'only the section that was collapsed before hides');
+    assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▾', 'the open section is open again');
+  });
+});
+
+test('the settings page toggles keeping sections collapsed after a drag', async () => {
+  const screen = await startScreen();
+  const checkbox = screen.app.find((n) => n.getAttribute && n.getAttribute('id') === 'opt-collapse-after-drag');
+  assert.ok(checkbox, 'checkbox not rendered');
+  assert.strictEqual(screen.storedConfig().collapseAfterDrag, true, 'on by default');
+  await screen.change(checkbox, false);
+  assert.strictEqual(screen.storedConfig().collapseAfterDrag, false);
 });
 
 test('a drop on a collapsed header lands even when the host dispatches nothing', async () => {
@@ -736,7 +775,8 @@ test('headers: a quick release on a collapsed header needs no waiting', async ()
     assert.strictEqual(stored(host).projects.p1.membership.u1, 'later');
     const hidden = () =>
       doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
-    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'never opened, still folded, member inside');
+    await sleep(300);
+    assert.deepStrictEqual(hidden(), ['a1', 'a2', 'b1', 'b2', 'u1'], 'everything folded after the drag, member inside');
   });
 });
 

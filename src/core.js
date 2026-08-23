@@ -41,6 +41,7 @@ var BacklogSectionsCore = (function () {
       headerButton: true,
       clickSelectsTask: true,
       moveDueThisWeek: false,
+      collapseAfterDrag: true,
     };
   }
 
@@ -167,6 +168,9 @@ var BacklogSectionsCore = (function () {
     }
     if (typeof input.moveDueThisWeek === 'boolean') {
       config.moveDueThisWeek = input.moveDueThisWeek;
+    }
+    if (typeof input.collapseAfterDrag === 'boolean') {
+      config.collapseAfterDrag = input.collapseAfterDrag;
     }
     var projectsIn = isPlainObject(input.projects) ? input.projects : {};
     var remap = null;

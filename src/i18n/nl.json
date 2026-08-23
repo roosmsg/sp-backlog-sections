@@ -48,7 +48,9 @@
       "CLICK_SELECTS": "Eén klik selecteert een taak, twee klikken bewerken de naam",
       "CLICK_SELECTS_HINT": "Zonder deze optie opent een klik op de naam van een taak die meteen om te bewerken. De optie geldt overal in de app, niet alleen in de backlog.",
       "MOVE_DUE": "Haal taken die deze week gepland staan uit de backlog",
-      "MOVE_DUE_HINT": "Een backlogtaak met een geplande datum in de lopende week (maandag tot en met zondag) verhuist naar de bovenkant van de takenlijst van het project \u2014 \u00e9\u00e9n keer per taak per week, dus terugzetten in de backlog houdt stand tot de volgende week. Oudere verlopen datums blijven liggen."
+      "MOVE_DUE_HINT": "Een backlogtaak met een geplande datum in de lopende week (maandag tot en met zondag) verhuist naar de bovenkant van de takenlijst van het project \u2014 \u00e9\u00e9n keer per taak per week, dus terugzetten in de backlog houdt stand tot de volgende week. Oudere verlopen datums blijven liggen.",
+      "COLLAPSE_AFTER_DRAG": "Houd alle secties ingeklapt na het slepen",
+      "COLLAPSE_AFTER_DRAG_HINT": "Tijdens het slepen klappen alle secties in tot een compacte lijst dropdoelen. Met deze optie aan blijven ze na het loslaten ingeklapt (per apparaat); uit, dan openen ze weer zoals ze stonden."
     },
     "BUTTONS": {
       "CANCEL": "Annuleren",

@@ -351,6 +351,11 @@
           });
         }
 
+        function setCollapseAfterDrag(value) {
+          state.config.collapseAfterDrag = !!value;
+          return save();
+        }
+
         function setMoveDue(value) {
           state.config.moveDueThisWeek = !!value;
           return save();
@@ -454,6 +459,7 @@
           var id = 'opt-header-button';
           var clickId = 'opt-click-selects';
           var dueId = 'opt-move-due';
+          var collapseId = 'opt-collapse-after-drag';
           return el('section', { className: 'card' }, [
             el('h2', { text: t('UI.OPTIONS.HEADING') }),
             el('div', { className: 'option' }, [
@@ -496,6 +502,20 @@
               el('div', null, [
                 el('label', { for: dueId, text: t('UI.OPTIONS.MOVE_DUE') }),
                 el('div', { className: 'hint', text: t('UI.OPTIONS.MOVE_DUE_HINT') }),
+              ]),
+            ]),
+            el('div', { className: 'option' }, [
+              el('input', {
+                type: 'checkbox',
+                id: collapseId,
+                checked: state.config.collapseAfterDrag,
+                onchange: function (event) {
+                  setCollapseAfterDrag(event.target.checked);
+                },
+              }),
+              el('div', null, [
+                el('label', { for: collapseId, text: t('UI.OPTIONS.COLLAPSE_AFTER_DRAG') }),
+                el('div', { className: 'hint', text: t('UI.OPTIONS.COLLAPSE_AFTER_DRAG_HINT') }),
               ]),
             ]),
           ]);

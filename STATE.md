@@ -4,7 +4,21 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.17.0)
+## What exists (2026-08-23, v2.18.0)
+
+- v2.18.0 (user requests 2026-08-23, after confirming v2.17.0 "perfect"):
+  - **Sections stay collapsed after a drag** (option `collapseAfterDrag`,
+    default ON, settings checkbox EN/NL): stopDragTracking marks every
+    section of the active project collapsed in the per-device collapse store
+    (collapseAllAfterDrag), so the compact drop-target view sticks; off, the
+    stored state simply redraws as before. Since a drag folds everything,
+    in-section reordering by drag is gone anyway — every drag is a header
+    drop now.
+  - **Accept flash**: the header that took the drop gets `bs-accepted` at
+    once (onDragEnd) and fillHeader keeps the class for ACCEPT_FLASH_MS
+    (1.5 s; acceptFlash {key, at}) so the passes right after the drop do
+    not cut it short; CSS: an accent wash fading out (color-mix of
+    --c-accent) plus a count pop. A later(decorate) takes the class off.
 
 - v2.17.0 (live finding, screenshot from the user): v2.16.0's fold was done
   by setting the hidden attribute on rows — but the app RE-RENDERS rows

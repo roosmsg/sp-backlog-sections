@@ -48,7 +48,9 @@
       "CLICK_SELECTS": "One click selects a task, two clicks edit its name",
       "CLICK_SELECTS_HINT": "Without this, clicking a task name opens it for editing straight away. The option applies everywhere in the app, not only in the backlog.",
       "MOVE_DUE": "Move tasks scheduled for this week out of the backlog",
-      "MOVE_DUE_HINT": "A backlog task with a due date in the current week (Monday to Sunday) moves to the top of the project's task list \u2014 once per task per week, so putting it back in the backlog keeps it there until next week. Older overdue dates stay put."
+      "MOVE_DUE_HINT": "A backlog task with a due date in the current week (Monday to Sunday) moves to the top of the project's task list \u2014 once per task per week, so putting it back in the backlog keeps it there until next week. Older overdue dates stay put.",
+      "COLLAPSE_AFTER_DRAG": "Keep every section collapsed after a drag",
+      "COLLAPSE_AFTER_DRAG_HINT": "Dragging folds every section into a compact list of drop targets. With this on, they stay folded after the drop (per device); off, they reopen the way they were."
     },
     "BUTTONS": {
       "CANCEL": "Cancel",

@@ -559,6 +559,13 @@
    */
   var STYLE_ID = 'backlog-sections-style';
   var SUPPRESSED_CSS = '[data-backlog-sections-suppressed]{display:none !important;}';
+  // The accept flash: a soft accent wash that fades out, and the count pops.
+  var ACCEPT_CSS =
+    '@keyframes bs-accept { 0% { background: color-mix(in srgb, var(--c-accent, #8888ff) 38%, transparent); }' +
+    ' 100% { background: transparent; } }' +
+    '@keyframes bs-pop { 0% { transform: scale(1); } 35% { transform: scale(1.45); } 100% { transform: scale(1); } }' +
+    '.' + 'backlog-sections-header' + '.bs-accepted { animation: bs-accept 1.4s ease-out; }' +
+    '.' + 'backlog-sections-header' + '.bs-accepted .bs-count { display: inline-block; animation: bs-pop .6s ease-out; }';
   var HEADER_CLASS = 'backlog-sections-header';
   var HEADER_ATTR = 'data-backlog-sections-header';
   var HIDDEN_ATTR = 'data-backlog-sections-hidden';
@@ -606,6 +613,37 @@
     return !!(collapsed[projectId] && collapsed[projectId][sectionKey]);
   }
 
+  /*
+   * After a drag every section stays collapsed (option collapseAfterDrag,
+   * default on): the drag folded them all into a compact list of targets,
+   * and the user asked for that view to stick instead of springing back.
+   * Per device, like the rest of the collapse state.
+   */
+  function collapseAllAfterDrag(projectId) {
+    if (!projectId || !config.collapseAfterDrag) {
+      return;
+    }
+    var project = core.projectView(config, projectId);
+    collapsed[projectId] = collapsed[projectId] || {};
+    project.sections.forEach(function (section) {
+      collapsed[projectId][sectionKey(section.id)] = true;
+    });
+    saveCollapsed();
+  }
+
+  /*
+   * The section that just accepted a dropped task flashes for a moment —
+   * the only feedback left when everything is folded. fillHeader keeps the
+   * class on through the passes that run right after the drop (the own
+   * pass, the echo), so the animation is not cut short.
+   */
+  var ACCEPT_FLASH_MS = 1500;
+  var acceptFlash = null; // { key, at }
+
+  function isFlashing(key) {
+    return !!(acceptFlash && acceptFlash.key === key && Date.now() - acceptFlash.at < ACCEPT_FLASH_MS);
+  }
+
   function toggleCollapsed(projectId, sectionKey) {
     collapsed[projectId] = collapsed[projectId] || {};
     if (collapsed[projectId][sectionKey]) {
@@ -641,6 +679,7 @@
     style.id = STYLE_ID;
     style.textContent =
       SUPPRESSED_CSS +
+      ACCEPT_CSS +
       '.' + HEADER_CLASS + ' { display: flex; align-items: center; gap: 12px; margin: 20px 4px 6px; padding: 10px 10px 10px 6px;' +
       ' min-height: 40px; box-sizing: border-box;' +
       ' border-top: 1px solid var(--divider-color, rgba(128,128,128,.35)); font-size: 1.2rem; font-weight: 600;' +
@@ -733,7 +772,11 @@
     }
     // A section without tasks here is dimmed; the class is rewritten only
     // when it actually changes, like the texts below.
-    var className = HEADER_CLASS + (block.sectionId ? '' : ' bs-loose') + (block.taskIds.length ? '' : ' bs-empty');
+    var className =
+      HEADER_CLASS +
+      (block.sectionId ? '' : ' bs-loose') +
+      (block.taskIds.length ? '' : ' bs-empty') +
+      (isFlashing(sectionKey(block.sectionId)) ? ' bs-accepted' : '');
     if (header.className !== className) {
       header.className = className;
     }
@@ -924,6 +967,11 @@
         at: Date.now(),
       };
       debug('dropped on header', draggedTaskId, targetHeader.getAttribute(HEADER_ATTR));
+      acceptFlash = { key: targetHeader.getAttribute(HEADER_ATTR), at: Date.now() };
+      if (targetHeader.className.indexOf('bs-accepted') === -1) {
+        targetHeader.className = targetHeader.className + ' bs-accepted';
+      }
+      later(decorate, ACCEPT_FLASH_MS + 50); // takes the class off again
       // A release over a collapsed header usually leaves the row where it
       // came from — and an unchanged order makes the host dispatch nothing,
       // so no hook would ever apply this drop. Run a pass of our own; when
@@ -937,7 +985,11 @@
   function stopDragTracking() {
     markTarget(null);
     draggedTaskId = null;
-    // Sections folded for the drag reopen to their stored state.
+    if (dragging) {
+      // The drag folded every section; with the option on they stay that way.
+      collapseAllAfterDrag(activeProjectId);
+    }
+    // The stored collapse state is redrawn (sections reopen, or stay shut).
     reapplySoon();
     var doc = hostDocument();
     var list = doc && typeof doc.querySelector === 'function' ? doc.querySelector(LIST_SELECTOR) : null;
