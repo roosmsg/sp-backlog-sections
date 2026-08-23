@@ -145,12 +145,12 @@
   // ---- adopting imported tasks into sections --------------------------------------
 
   /*
-   * With the option on, a task that arrives in the backlog from the Microsoft
-   * To Do plugin is placed in the section named after its To Do list (the
-   * name match lives in core.matchSectionByListName; the To Do plugin
-   * publishes {listKey: name} in localStorage). Every task is considered
-   * once — the project's adopted map remembers that — so dragging it
-   * somewhere else afterwards is never undone by the next pass.
+   * An importer plugin (the Microsoft To Do plugin) can publish section
+   * assignments — {issueId: sectionName} plus its own on/off switch — under
+   * core.ASSIGN_STORAGE_KEY; the option lives over there, this side only
+   * executes. Every task is considered once — the project's adopted map
+   * remembers that — so dragging it somewhere else afterwards is never
+   * undone by the next pass.
    */
   var TASK_INFO_TTL_MS = 5000;
   var taskInfoCache = { at: 0, byId: null };
@@ -178,14 +178,12 @@
       });
   }
 
-  function readListMap() {
+  function readAssignments() {
     try {
       var store = deviceStorage();
-      var raw = store ? store.getItem(core.LIST_MAP_STORAGE_KEY) : null;
-      var parsed = raw ? JSON.parse(raw) : null;
-      return parsed && parsed.lists && typeof parsed.lists === 'object' ? parsed.lists : {};
+      return core.parseAssignPayload(store ? store.getItem(core.ASSIGN_STORAGE_KEY) : null);
     } catch (e) {
-      return {};
+      return null;
     }
   }
 
@@ -194,8 +192,9 @@
     var prunedAdopted = core.pruneAdopted(entry.adopted, order);
     var adoptedChanged = !core.sameMembership(prunedAdopted, entry.adopted || {});
     var view = { sections: config.sections, membership: membership };
+    var assign = readAssignments();
     var pending =
-      config.autoAssignFromLists &&
+      !!assign &&
       order.some(function (id) {
         return !core.sectionOf(view, id) && !prunedAdopted[id];
       });
@@ -206,7 +205,7 @@
       return Promise.resolve({ membership: membership, adoptedChanged: adoptedChanged });
     }
     return taskInfos().then(function (infos) {
-      var result = core.adoptTasksFromLists(view, order, infos, readListMap(), prunedAdopted);
+      var result = core.adoptAssignedTasks(view, order, infos, assign, prunedAdopted);
       var merged = {};
       Object.keys(membership).forEach(function (id) {
         merged[id] = membership[id];

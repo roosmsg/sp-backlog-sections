@@ -819,9 +819,11 @@ test('README exists, is English and documents the essentials', () => {
 
 // ---- adopting imported tasks into sections ----------------------------------------------------
 
-const withListMap = async (map, fn) => {
+const withAssignments = async (payload, fn) => {
   const storage = new FakeStorage();
-  storage.setItem('sp-mstodo.lists.v1', JSON.stringify({ v: 1, updatedAt: 1, lists: map }));
+  if (payload !== null) {
+    storage.setItem('sp-backlog-sections.assign.v1', JSON.stringify(payload));
+  }
   const saved = globalThis.window;
   globalThis.window = { localStorage: storage };
   try {
@@ -831,6 +833,7 @@ const withListMap = async (map, fn) => {
     else globalThis.window = saved;
   }
 };
+const ASSIGN_ON = (assign) => ({ v: 1, updatedAt: 1, source: 'microsoft-todo', enabled: true, assign });
 
 test('a list name finds its section: exact, unique prefix, never ambiguous', () => {
   const sections = [
@@ -863,31 +866,39 @@ test('a list name finds its section: exact, unique prefix, never ambiguous', () 
   );
 });
 
-test('adoptTasksFromLists places new imported tasks once and only once', () => {
+test('adoptAssignedTasks places published tasks once and only once', () => {
   const project = { sections: [{ id: 's1', name: 'Next' }], membership: { a1: 's1' } };
-  const infos = { u1: 'FOLX::T1', u2: 'FOLY::T2', m1: null };
-  const names = { FOLX: 'Next' };
-  const first = core.adoptTasksFromLists(project, ['u1', 'u2', 'a1', 'z9'], infos, names, {});
+  const infos = { u1: 'FOLX::T1', u2: 'FOLY::T2', u3: 'FOLZ::T3', m1: null };
+  // u2 is published with a name no section has; u3 is not published at all.
+  const assign = { 'FOLX::T1': 'Next', 'FOLY::T2': 'Elders' };
+  const first = core.adoptAssignedTasks(project, ['u1', 'u2', 'u3', 'a1', 'z9'], infos, assign, {});
   assert.deepStrictEqual(first.additions, { u1: 's1' });
-  // u2 was considered (unknown list): marked, not placed. z9 has no issue info
-  // yet and is reconsidered next pass. a1 already sits in a section.
+  // Considered: published tasks, matched or not. u3 and z9 are left for a
+  // later pass (the importer may publish them yet); a1 already has a section.
   assert.deepStrictEqual(first.considered.sort(), ['u1', 'u2']);
   const adopted = {};
   first.considered.forEach((id) => (adopted[id] = true));
-  const second = core.adoptTasksFromLists(project, ['u1', 'u2', 'a1'], infos, names, adopted);
+  const second = core.adoptAssignedTasks(project, ['u1', 'u2', 'a1'], infos, assign, adopted);
   assert.deepStrictEqual(second.additions, {});
   assert.deepStrictEqual(second.considered, []);
 });
 
-test('with the option on, an imported task lands in its list section on start-up', async () => {
-  await withListMap({ FOLX: 'Next' }, async () => {
+test('the published payload is only accepted when it is sound and enabled', () => {
+  assert.strictEqual(core.parseAssignPayload(null), null);
+  assert.strictEqual(core.parseAssignPayload('not json'), null);
+  assert.strictEqual(core.parseAssignPayload('{"enabled":false,"assign":{"a":"b"}}'), null);
+  assert.strictEqual(core.parseAssignPayload('{"enabled":true}'), null);
+  assert.deepStrictEqual(core.parseAssignPayload('{"enabled":true,"assign":{"a":"b"}}'), { a: 'b' });
+});
+
+test('a published assignment lands the imported task in its section on start-up', async () => {
+  await withAssignments(ASSIGN_ON({ 'FOLX::AAMk1': 'Next' }), async () => {
     const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
     const host = await startHost({
       tasks,
       projects: [
         { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
       ],
-      storedConfig: { ...CONFIG, autoAssignFromLists: true },
     });
     const cfg = stored(host);
     assert.strictEqual(cfg.projects.p1.membership.i1, 'next');
@@ -901,12 +912,11 @@ test('with the option on, an imported task lands in its list section on start-up
 });
 
 test('an adopted task the user drags out is not re-placed', async () => {
-  await withListMap({ FOLX: 'Next' }, async () => {
+  await withAssignments(ASSIGN_ON({ 'FOLX::AAMk1': 'Next' }), async () => {
     const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
     // As stored after the user dragged i1 out: no membership, adopted mark kept.
     const config = {
       ...CONFIG,
-      autoAssignFromLists: true,
       projects: { p1: { membership: MEMBERSHIP, adopted: { i1: true } } },
     };
     const host = await startHost({
@@ -921,26 +931,21 @@ test('an adopted task the user drags out is not re-placed', async () => {
   });
 });
 
-test('with the option off nothing is placed and no tasks are fetched', async () => {
-  await withListMap({ FOLX: 'Next' }, async () => {
-    const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
-    const host = await startHost({
-      tasks,
-      projects: [
-        { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
-      ],
-    });
+test('without a published payload (or disabled) nothing is placed, no tasks fetched', async () => {
+  const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
+  const project = () => [
+    { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
+  ];
+  await withAssignments(null, async () => {
+    const host = await startHost({ tasks, projects: project() });
     assert.strictEqual(stored(host).projects.p1.membership.i1, undefined);
     assert.strictEqual(host.calls.filter((c) => c.method === 'getTasks').length, 0);
   });
-});
-
-test('the settings page toggles the automatic placement', async () => {
-  const screen = await startScreen();
-  const checkbox = screen.app.find((n) => n.getAttribute && n.getAttribute('id') === 'opt-auto-assign');
-  assert.ok(checkbox, 'auto-assign checkbox not rendered');
-  await screen.change(checkbox, true);
-  assert.strictEqual(screen.storedConfig().autoAssignFromLists, true);
+  await withAssignments({ v: 1, enabled: false, assign: { 'FOLX::AAMk1': 'Next' } }, async () => {
+    const host = await startHost({ tasks, projects: project() });
+    assert.strictEqual(stored(host).projects.p1.membership.i1, undefined);
+    assert.strictEqual(host.calls.filter((c) => c.method === 'getTasks').length, 0);
+  });
 });
 
 // ---- run --------------------------------------------------------------------------------------------

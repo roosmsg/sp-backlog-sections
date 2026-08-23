@@ -30,7 +30,6 @@ var BacklogSectionsCore = (function () {
       projects: {},
       headerButton: true,
       clickSelectsTask: true,
-      autoAssignFromLists: false,
     };
   }
 
@@ -148,9 +147,6 @@ var BacklogSectionsCore = (function () {
     }
     if (typeof input.clickSelectsTask === 'boolean') {
       config.clickSelectsTask = input.clickSelectsTask;
-    }
-    if (typeof input.autoAssignFromLists === 'boolean') {
-      config.autoAssignFromLists = input.autoAssignFromLists;
     }
     var projectsIn = isPlainObject(input.projects) ? input.projects : {};
     var remap = null;
@@ -536,12 +532,14 @@ var BacklogSectionsCore = (function () {
   // ---- automatic sectioning of imported tasks --------------------------------------
 
   /*
-   * The Microsoft To Do plugin publishes {listKey: listName} under this
-   * localStorage key (same host window). A task imported by it carries an
-   * issueId of the form <listKey>::<taskKey>, which is what ties a backlog
-   * task back to the To Do list it came from.
+   * The assignment contract: an importer plugin (the Microsoft To Do plugin,
+   * for now) publishes {v, enabled, assign: {issueId: sectionName}} under
+   * this localStorage key (same host window). The option that turns the
+   * behaviour on lives in that plugin; this plugin only executes — it
+   * matches the published names against its sections and places each task
+   * once.
    */
-  var LIST_MAP_STORAGE_KEY = 'sp-mstodo.lists.v1';
+  var ASSIGN_STORAGE_KEY = 'sp-backlog-sections.assign.v1';
 
   function normalizeListName(name) {
     return String(name == null ? '' : name)
@@ -589,20 +587,28 @@ var BacklogSectionsCore = (function () {
     return byPrefix[0].id;
   }
 
-  function listKeyOfIssueId(issueId) {
-    var raw = String(issueId == null ? '' : issueId);
-    var sep = raw.indexOf('::');
-    return sep > 0 ? raw.slice(0, sep) : '';
+  /* The published payload, checked and reduced to what the adoption needs. */
+  function parseAssignPayload(raw) {
+    var payload;
+    try {
+      payload = JSON.parse(String(raw == null ? '' : raw));
+    } catch (e) {
+      return null;
+    }
+    if (!payload || payload.enabled !== true || !payload.assign || typeof payload.assign !== 'object') {
+      return null;
+    }
+    return payload.assign;
   }
 
   /*
-   * Which unsectioned tasks should be placed, based on the To Do list their
-   * issueId points into. Every task is considered exactly once (the caller
-   * marks the returned considered-ids in the project's adopted map), so a
-   * task the user later drags out of the section stays out, and old tasks are
-   * never grabbed retroactively when sections change.
+   * Which unsectioned tasks should be placed, based on the section name the
+   * importer published for their issueId. Every task is considered exactly
+   * once (the caller marks the returned considered-ids in the project's
+   * adopted map), so a task the user later drags out of the section stays
+   * out, and old tasks are never grabbed retroactively when sections change.
    */
-  function adoptTasksFromLists(project, order, taskInfos, listNames, adopted) {
+  function adoptAssignedTasks(project, order, taskInfos, assign, adopted) {
     var additions = {};
     var considered = [];
     (order || []).forEach(function (taskId) {
@@ -613,10 +619,12 @@ var BacklogSectionsCore = (function () {
       if (!issueId) {
         return; // not an imported task (or unknown yet): reconsider next pass
       }
+      var name = assign ? assign[issueId] : '';
+      if (!name) {
+        return; // the importer says nothing about this task
+      }
       considered.push(taskId);
-      var key = listKeyOfIssueId(issueId);
-      var name = key && listNames ? listNames[key] : '';
-      var sectionId = name ? matchSectionByListName(project.sections, name) : null;
+      var sectionId = matchSectionByListName(project.sections, name);
       if (sectionId) {
         additions[taskId] = sectionId;
       }
@@ -792,11 +800,11 @@ var BacklogSectionsCore = (function () {
     stepSection: stepSection,
     inferMembership: inferMembership,
     pruneMembership: pruneMembership,
-    LIST_MAP_STORAGE_KEY: LIST_MAP_STORAGE_KEY,
+    ASSIGN_STORAGE_KEY: ASSIGN_STORAGE_KEY,
     normalizeListName: normalizeListName,
     matchSectionByListName: matchSectionByListName,
-    listKeyOfIssueId: listKeyOfIssueId,
-    adoptTasksFromLists: adoptTasksFromLists,
+    parseAssignPayload: parseAssignPayload,
+    adoptAssignedTasks: adoptAssignedTasks,
     pruneAdopted: pruneAdopted,
     desiredOrder: desiredOrder,
     blocks: blocks,
