@@ -11,6 +11,16 @@ var BacklogSectionsCore = (function () {
 
   var CONFIG_VERSION = 2;
 
+  /*
+   * The standard section every task starts in. It is virtual: projectView
+   * appends it to the shared list, so ordering, headers, drops and the
+   * keyboard treat it as an ordinary section that always sits at the bottom —
+   * but it is never stored (memberships pointing at it are stripped), never
+   * part of the configured sections, and therefore invisible on the settings
+   * page and impossible to rename or delete.
+   */
+  var DEFAULT_SECTION_ID = '__default__';
+
   function isPlainObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
@@ -70,7 +80,7 @@ var BacklogSectionsCore = (function () {
       } else {
         continue;
       }
-      if (!id || seen[id]) {
+      if (!id || seen[id] || id === DEFAULT_SECTION_ID) {
         id = newSectionId();
       }
       seen[id] = true;
@@ -216,8 +226,9 @@ var BacklogSectionsCore = (function () {
    * list being global is invisible to the ordering and header logic.
    */
   function projectView(config, projectId) {
+    var named = config && Array.isArray(config.sections) ? config.sections : [];
     return {
-      sections: (config && Array.isArray(config.sections) ? config.sections : []),
+      sections: named.concat([{ id: DEFAULT_SECTION_ID, name: '' }]),
       membership: getProject(config, projectId).membership,
     };
   }
@@ -230,13 +241,20 @@ var BacklogSectionsCore = (function () {
     return index;
   }
 
-  /* The section of a task, or null when it has none or its section is gone. */
+  /*
+   * The section of a task. A task without a stored membership — and one whose
+   * section is gone — is in the standard section.
+   */
   function sectionOf(project, taskId) {
     var sectionId = project.membership[taskId];
-    if (typeof sectionId !== 'string') {
-      return null;
+    if (
+      typeof sectionId === 'string' &&
+      sectionId !== DEFAULT_SECTION_ID &&
+      Object.prototype.hasOwnProperty.call(sectionIndex(project), sectionId)
+    ) {
+      return sectionId;
     }
-    return Object.prototype.hasOwnProperty.call(sectionIndex(project), sectionId) ? sectionId : null;
+    return DEFAULT_SECTION_ID;
   }
 
   /*
@@ -295,11 +313,10 @@ var BacklogSectionsCore = (function () {
    * unsorted tasks live.
    */
   function sectionStops(project) {
-    return project.sections
-      .map(function (section) {
-        return section.id;
-      })
-      .concat([null]);
+    // projectView already puts the standard section at the end.
+    return project.sections.map(function (section) {
+      return section.id;
+    });
   }
 
   /*
@@ -429,7 +446,7 @@ var BacklogSectionsCore = (function () {
     for (i = 0; i < after.length; i++) {
       if (kept[after[i]]) {
         var own = sectionOf(project, after[i]);
-        if (own) {
+        if (own && own !== DEFAULT_SECTION_ID) {
           result[after[i]] = own;
         }
       }
@@ -472,7 +489,7 @@ var BacklogSectionsCore = (function () {
         // Moved off the edge of its block: one section further, no matter how
         // many empty ones lie between it and the next block of rows.
         chosen = stepped;
-      } else if ((kind === 'up' || kind === 'down') && sectionOf(project, id) !== null) {
+      } else if (kind === 'up' || kind === 'down') {
         chosen = sectionOf(project, id); // moved inside its own block
       } else if (!prev && !next) {
         chosen = oldSection;
@@ -502,7 +519,7 @@ var BacklogSectionsCore = (function () {
           chosen = nextSection;
         }
       }
-      if (chosen) {
+      if (chosen && chosen !== DEFAULT_SECTION_ID) {
         result[id] = chosen;
       }
     }
@@ -630,7 +647,7 @@ var BacklogSectionsCore = (function () {
     var additions = {};
     var considered = [];
     (order || []).forEach(function (taskId) {
-      if (sectionOf(project, taskId) || (adopted && adopted[taskId])) {
+      if (sectionOf(project, taskId) !== DEFAULT_SECTION_ID || (adopted && adopted[taskId])) {
         return;
       }
       var issueId = taskInfos ? taskInfos[taskId] : null;
@@ -768,7 +785,7 @@ var BacklogSectionsCore = (function () {
     var loose = [];
     order.forEach(function (taskId) {
       var sectionId = sectionOf(project, taskId);
-      if (sectionId) {
+      if (buckets[sectionId]) {
         buckets[sectionId].push(taskId);
       } else {
         loose.push(taskId);
@@ -891,6 +908,7 @@ var BacklogSectionsCore = (function () {
     stepSection: stepSection,
     inferMembership: inferMembership,
     pruneMembership: pruneMembership,
+    DEFAULT_SECTION_ID: DEFAULT_SECTION_ID,
     ASSIGN_STORAGE_KEY: ASSIGN_STORAGE_KEY,
     weekRangeOf: weekRangeOf,
     weekKeyOf: weekKeyOf,

@@ -255,7 +255,7 @@
     var pending =
       !!assign &&
       order.some(function (id) {
-        return !core.sectionOf(view, id) && !prunedAdopted[id];
+        return core.sectionOf(view, id) === core.DEFAULT_SECTION_ID && !prunedAdopted[id];
       });
     if (!pending) {
       if (adoptedChanged) {
@@ -308,7 +308,9 @@
       return Promise.resolve();
     }
     var project = core.projectView(config, projectId);
-    var hasConfig = project.sections.length > 0;
+    // The standard section alone (no named sections configured) means the
+    // plugin has nothing to do in this project.
+    var hasConfig = config.sections.length > 0;
     if (!hasConfig) {
       lastOrder[projectId] = order;
       decorate();
@@ -412,10 +414,10 @@
     Object.keys(membership).forEach(function (id) {
       out[id] = membership[id];
     });
-    if (wanted) {
+    if (wanted && wanted !== core.DEFAULT_SECTION_ID) {
       out[drop.taskId] = wanted;
     } else {
-      delete out[drop.taskId]; // the "no section" header
+      delete out[drop.taskId]; // the standard section: no stored membership
     }
     return out;
   }
@@ -638,7 +640,7 @@
   }
 
   function headerLabel(project, sectionId) {
-    if (!sectionId) {
+    if (!sectionId || sectionId === core.DEFAULT_SECTION_ID) {
       return t('BACKGROUND.NO_SECTION');
     }
     for (var i = 0; i < project.sections.length; i++) {
@@ -987,7 +989,7 @@
       trackDrag(doc, list);
       var project = activeProjectId ? core.projectView(config, activeProjectId) : null;
       var order = activeProjectId ? lastOrder[activeProjectId] : null;
-      if (!project || !project.sections.length || !order) {
+      if (!project || !config.sections.length || !order) {
         debug('decorate: nothing to draw', { project: activeProjectId, sections: project && project.sections.length, order: !!order });
         removeHeaders(doc, list);
         return;
@@ -1049,10 +1051,10 @@
         var prev = row.previousSibling;
         return prev && typeof prev.getAttribute === 'function' && prev.getAttribute(HEADER_ATTR) === key ? prev : row;
       };
-      // The unsorted block sits at the bottom, so a trailing section that
-      // holds no task here belongs directly above it; only without unsorted
-      // tasks does the sweep start at the very end of the list.
-      var following = startOfBlock(sectionKey(null));
+      // The standard section is the last entry of the section list, so the
+      // reverse sweep handles it like any other: empty at the very end,
+      // otherwise everything settles directly above its block.
+      var following = null;
       for (var n = project.sections.length - 1; n >= 0; n--) {
         var section = project.sections[n];
         if (wanted[section.id]) {
@@ -1337,7 +1339,7 @@
     }
     var project = core.projectView(config, projectId);
     var order = lastOrder[projectId] || null;
-    if (!project.sections.length || !order) {
+    if (!config.sections.length || !order) {
       return Promise.resolve();
     }
     var read = typeof api.getFocusedTask === 'function' ? api.getFocusedTask : api.getSelectedTask;
@@ -1354,7 +1356,7 @@
           debug('section shortcut: no task of this backlog in hand', taskId);
           return;
         }
-        var stops = core.sectionStops(project); // "no section" on top, then the sections
+        var stops = core.sectionStops(project); // the sections, the standard one last
         var current = stops.indexOf(core.sectionOf(project, taskId));
         var next = current + delta;
         if (next < 0 || next >= stops.length) {
@@ -1364,7 +1366,7 @@
         Object.keys(project.membership).forEach(function (id) {
           membership[id] = project.membership[id];
         });
-        if (stops[next]) {
+        if (stops[next] && stops[next] !== core.DEFAULT_SECTION_ID) {
           membership[taskId] = stops[next];
         } else {
           delete membership[taskId];

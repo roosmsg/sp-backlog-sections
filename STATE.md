@@ -4,7 +4,24 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.9.0)
+## What exists (2026-08-23, v2.10.0)
+
+- v2.10.0 (user request 2026-08-23, after v2.9.0 made dragging out of the
+  bottom loose block awkward): **"Zonder sectie" is now a real standard
+  section** — virtual, not stored. `core.DEFAULT_SECTION_ID` ('__default__');
+  projectView appends {id, name: ''} to the shared list, so ordering, blocks,
+  stops, drops and the keyboard treat it as an ordinary section that always
+  sits at the bottom. Its header ALWAYS renders (empty-section path), so
+  there is always a visible band to drag a task out to — the v2.9.0 gap.
+  It is never stored: normalizeSections reserves the id, sectionOf returns it
+  for tasks without (or with a dangling) membership, and every membership
+  write strips it (inferMembership anchors/chosen, header drop, shortcut) —
+  so the settings page, which renders config.sections, never shows it and it
+  cannot be renamed or deleted. Gates that used to test
+  `project.sections.length` now test `config.sections.length` (named
+  sections), so a config without sections still deactivates the plugin.
+  Adoption/due-move semantics unchanged ("unsectioned" = standard section).
+  Not yet verified live.
 
 - v2.9.0 (user requests 2026-08-23) brings two changes:
   - **The "no section" block sits at the bottom again**, reverting the
