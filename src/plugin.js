@@ -166,8 +166,13 @@
       .then(function (tasks) {
         var byId = {};
         (tasks || []).forEach(function (task) {
-          if (task && task.id && task.issueId) {
-            byId[task.id] = String(task.issueId);
+          if (task && task.id) {
+            byId[task.id] = {
+              issueId: task.issueId ? String(task.issueId) : null,
+              dueDay: typeof task.dueDay === 'string' ? task.dueDay : null,
+              dueWithTime: typeof task.dueWithTime === 'number' ? task.dueWithTime : null,
+              isDone: task.isDone === true,
+            };
           }
         });
         taskInfoCache = { at: Date.now(), byId: byId };
@@ -185,6 +190,60 @@
     } catch (e) {
       return null;
     }
+  }
+
+  /*
+   * With the option on, backlog tasks scheduled inside the current week
+   * (Monday to Sunday, local time) move to the top of the project's task
+   * list — once per task per week, so putting one back in the backlog (by
+   * hand, or the app's end-of-day sweep) keeps it there until next week.
+   * Runs at the head of every reconcile and from a half-hourly sweep; a move
+   * writes both lists in one updateProject, whose echo runs the ordinary
+   * section pass over the shrunken backlog.
+   */
+  function moveDueTasks(projectId, order, regularTaskIds) {
+    if (!config.moveDueThisWeek || !order.length || !Array.isArray(regularTaskIds)) {
+      return Promise.resolve(order);
+    }
+    var entry = core.getProject(config, projectId);
+    return taskInfos().then(function (infos) {
+      var plan = core.planDueMoves(order, infos, entry.movedOut, new Date());
+      var memoryChanged = !core.sameMembership(plan.movedOut, entry.movedOut || {});
+      if (memoryChanged) {
+        core.ensureProject(config, projectId).movedOut = plan.movedOut;
+      }
+      if (!plan.moveIds.length) {
+        return (memoryChanged ? saveConfig() : Promise.resolve()).then(function () {
+          return order;
+        });
+      }
+      var moving = {};
+      plan.moveIds.forEach(function (id) {
+        moving[id] = true;
+      });
+      var remaining = order.filter(function (id) {
+        return !moving[id];
+      });
+      var newRegular = plan.moveIds.concat(
+        regularTaskIds.filter(function (id) {
+          return !moving[id];
+        }),
+      );
+      debug('due move', projectId, plan.moveIds);
+      pendingWrites[projectId] = remaining;
+      lastOrder[projectId] = remaining;
+      return saveConfig()
+        .then(function () {
+          return api.updateProject(projectId, { taskIds: newRegular, backlogTaskIds: remaining });
+        })
+        .catch(function (error) {
+          delete pendingWrites[projectId];
+          logError('Due tasks of project ' + projectId + ' could not be moved to the list.', error);
+        })
+        .then(function () {
+          return remaining;
+        });
+    });
   }
 
   function adoptFromLists(projectId, order, membership) {
@@ -205,7 +264,13 @@
       return Promise.resolve({ membership: membership, adoptedChanged: adoptedChanged });
     }
     return taskInfos().then(function (infos) {
-      var result = core.adoptAssignedTasks(view, order, infos, assign, prunedAdopted);
+      var issueIds = {};
+      Object.keys(infos).forEach(function (id) {
+        if (infos[id].issueId) {
+          issueIds[id] = infos[id].issueId;
+        }
+      });
+      var result = core.adoptAssignedTasks(view, order, issueIds, assign, prunedAdopted);
       var merged = {};
       Object.keys(membership).forEach(function (id) {
         merged[id] = membership[id];
@@ -233,7 +298,7 @@
    * tasks still in the backlog, persist when they changed, and enforce the
    * section order — a write only when the order actually differs.
    */
-  function reconcileProject(projectId, newOrder) {
+  function reconcileProject(projectId, newOrder, regularTaskIds) {
     var order = Array.isArray(newOrder) ? newOrder.slice() : [];
     var pending = pendingWrites[projectId];
     if (pending && core.sameList(pending, order)) {
@@ -280,8 +345,12 @@
     });
     membership = core.pruneMembership(membership, order);
 
-    return adoptFromLists(projectId, order, membership).then(function (adoption) {
-      return finishReconcile(projectId, order, project, adoption.membership, adoption.adoptedChanged);
+    return moveDueTasks(projectId, order, regularTaskIds).then(function (remaining) {
+      var open = remaining;
+      var trimmed = core.pruneMembership(membership, open);
+      return adoptFromLists(projectId, open, trimmed).then(function (adoption) {
+        return finishReconcile(projectId, open, project, adoption.membership, adoption.adoptedChanged);
+      });
     });
   }
 
@@ -367,8 +436,9 @@
       if (known && core.sameList(known, order) && !pendingWrites[project.id] && !asked) {
         return;
       }
+      var regular = Array.isArray(project.taskIds) ? project.taskIds : [];
       chain = chain.then(function () {
-        return reconcileProject(project.id, order);
+        return reconcileProject(project.id, order, regular);
       });
     });
     return chain;
@@ -398,6 +468,35 @@
       latestProjectState = null;
       reconcileFromProjects(projectsFromState(state));
     }, 0);
+  }
+
+  var DUE_SWEEP_INTERVAL_MS = 30 * 60 * 1000;
+
+  function sweepDueTasks() {
+    if (!config.moveDueThisWeek) {
+      return Promise.resolve();
+    }
+    return Promise.resolve()
+      .then(function () {
+        return api.getAllProjects();
+      })
+      .then(function (projects) {
+        var chain = Promise.resolve();
+        (projects || []).forEach(function (project) {
+          if (!project || typeof project.id !== 'string') {
+            return;
+          }
+          var order = Array.isArray(project.backlogTaskIds) ? project.backlogTaskIds : [];
+          var regular = Array.isArray(project.taskIds) ? project.taskIds : [];
+          chain = chain.then(function () {
+            return moveDueTasks(project.id, order, regular);
+          });
+        });
+        return chain;
+      })
+      .catch(function (error) {
+        logError('The due-task sweep could not run.', error);
+      });
   }
 
   function reloadAllProjects() {
@@ -950,9 +1049,10 @@
         var prev = row.previousSibling;
         return prev && typeof prev.getAttribute === 'function' && prev.getAttribute(HEADER_ATTR) === key ? prev : row;
       };
-      // The unsorted block is the first one now, so a section that holds no
-      // task here belongs below every row: the sweep starts at the end.
-      var following = null;
+      // The unsorted block sits at the bottom, so a trailing section that
+      // holds no task here belongs directly above it; only without unsorted
+      // tasks does the sweep start at the very end of the list.
+      var following = startOfBlock(sectionKey(null));
       for (var n = project.sections.length - 1; n >= 0; n--) {
         var section = project.sections[n];
         if (wanted[section.id]) {
@@ -1346,7 +1446,7 @@
         return;
       }
       lastOrder = {};
-      return reloadAllProjects();
+      return reloadAllProjects().then(sweepDueTasks);
     });
   });
 
@@ -1374,7 +1474,8 @@
         debug('active context', activeProjectId);
         // Not awaited by design: the host awaits onReady and the first pass
         // over all projects may write a few orders.
-        reloadAllProjects();
+        reloadAllProjects().then(sweepDueTasks);
+        setInterval(sweepDueTasks, DUE_SWEEP_INTERVAL_MS);
       });
     });
   }

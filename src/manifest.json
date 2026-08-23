@@ -1,7 +1,7 @@
 {
   "id": "backlog-sections",
   "name": "Backlog Sections",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "manifestVersion": 1,
   "minSupVersion": "18.19.0",
   "description": "One shared set of named sections for every project backlog: headers with task counts and collapse in the backlog panel; drag a task under a header or use the move shortcuts to put it there.",

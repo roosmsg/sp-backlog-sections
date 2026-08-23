@@ -351,6 +351,11 @@
           });
         }
 
+        function setMoveDue(value) {
+          state.config.moveDueThisWeek = !!value;
+          return save();
+        }
+
         function setClickSelectsTask(value) {
           state.config.clickSelectsTask = !!value;
           return save();
@@ -448,6 +453,7 @@
         function renderOptions() {
           var id = 'opt-header-button';
           var clickId = 'opt-click-selects';
+          var dueId = 'opt-move-due';
           return el('section', { className: 'card' }, [
             el('h2', { text: t('UI.OPTIONS.HEADING') }),
             el('div', { className: 'option' }, [
@@ -476,6 +482,20 @@
               el('div', null, [
                 el('label', { for: clickId, text: t('UI.OPTIONS.CLICK_SELECTS') }),
                 el('div', { className: 'hint', text: t('UI.OPTIONS.CLICK_SELECTS_HINT') }),
+              ]),
+            ]),
+            el('div', { className: 'option' }, [
+              el('input', {
+                type: 'checkbox',
+                id: dueId,
+                checked: state.config.moveDueThisWeek,
+                onchange: function (event) {
+                  setMoveDue(event.target.checked);
+                },
+              }),
+              el('div', null, [
+                el('label', { for: dueId, text: t('UI.OPTIONS.MOVE_DUE') }),
+                el('div', { className: 'hint', text: t('UI.OPTIONS.MOVE_DUE_HINT') }),
               ]),
             ]),
           ]);

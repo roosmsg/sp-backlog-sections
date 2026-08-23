@@ -30,11 +30,12 @@ var BacklogSectionsCore = (function () {
       projects: {},
       headerButton: true,
       clickSelectsTask: true,
+      moveDueThisWeek: false,
     };
   }
 
   function emptyProject() {
-    return { membership: {}, adopted: {} };
+    return { membership: {}, adopted: {}, movedOut: {} };
   }
 
   /*
@@ -97,6 +98,12 @@ var BacklogSectionsCore = (function () {
         project.adopted[taskId.trim()] = true;
       }
     });
+    var movedIn = isPlainObject(raw.movedOut) ? raw.movedOut : {};
+    Object.keys(movedIn).forEach(function (taskId) {
+      if (typeof taskId === 'string' && taskId.trim() && typeof movedIn[taskId] === 'string') {
+        project.movedOut[taskId.trim()] = movedIn[taskId];
+      }
+    });
     return project;
   }
 
@@ -148,6 +155,9 @@ var BacklogSectionsCore = (function () {
     if (typeof input.clickSelectsTask === 'boolean') {
       config.clickSelectsTask = input.clickSelectsTask;
     }
+    if (typeof input.moveDueThisWeek === 'boolean') {
+      config.moveDueThisWeek = input.moveDueThisWeek;
+    }
     var projectsIn = isPlainObject(input.projects) ? input.projects : {};
     var remap = null;
     if (Array.isArray(input.sections)) {
@@ -176,8 +186,12 @@ var BacklogSectionsCore = (function () {
         source = { membership: moved };
       }
       var project = normalizeProject(source, knownSectionIds);
-      // An entry without memberships or adoption marks carries nothing.
-      if (Object.keys(project.membership).length || Object.keys(project.adopted).length) {
+      // An entry without memberships or other marks carries nothing.
+      if (
+        Object.keys(project.membership).length ||
+        Object.keys(project.adopted).length ||
+        Object.keys(project.movedOut).length
+      ) {
         config.projects[projectId.trim()] = project;
       }
     });
@@ -276,15 +290,16 @@ var BacklogSectionsCore = (function () {
   }
 
   /*
-   * The stops a task passes when it is moved section by section: "no section"
-   * on top, where the unsorted tasks live, and then every section in order.
+   * The stops a task passes when it is moved section by section: every
+   * section in order, and then "no section" at the bottom, where the
+   * unsorted tasks live.
    */
   function sectionStops(project) {
-    return [null].concat(
-      project.sections.map(function (section) {
+    return project.sections
+      .map(function (section) {
         return section.id;
       })
-    );
+      .concat([null]);
   }
 
   /*
@@ -448,11 +463,11 @@ var BacklogSectionsCore = (function () {
       var chosen;
       var stepped;
       // "To the top" and "to the bottom" say where the task belongs without
-      // any inference: above every section, and in the last one.
+      // any inference: the first section, and the unsorted block at the end.
       if (kind === 'top') {
-        chosen = null;
+        chosen = firstSectionId(project);
       } else if (kind === 'bottom') {
-        chosen = lastSectionId(project);
+        chosen = null;
       } else if ((kind === 'up' || kind === 'down') && (stepped = stepSection(before, project, id, kind)) !== undefined) {
         // Moved off the edge of its block: one section further, no matter how
         // many empty ones lie between it and the next block of rows.
@@ -470,12 +485,15 @@ var BacklogSectionsCore = (function () {
         // On a boundary. An empty section there is what the user aimed at: it
         // has no rows to drop between, so the boundary is its only target.
         // Once it holds a task the ordinary rules apply to it as well.
+        // The empty-section rule applies between two blocks only: above every
+        // row the drop sits under the first block's own header (an empty
+        // section there is reached by dropping on its header, which wins
+        // over all of this), and with only loose rows there is no section.
         var empty = prev ? firstEmptySectionBetween(project, after, prevSection, nextSection, id) : null;
         if (empty) {
           chosen = empty;
         } else if (!prev) {
-          // Above every row is above every section: the unsorted block.
-          chosen = null;
+          chosen = nextSection;
         } else if (oldSection === prevSection || oldSection === nextSection) {
           // On a boundary next to its own section the task stayed in it: moved
           // to the end or the top of that section, not across.
@@ -632,6 +650,79 @@ var BacklogSectionsCore = (function () {
     return { additions: additions, considered: considered };
   }
 
+  // ---- moving due tasks out of the backlog -----------------------------------------
+
+  function pad2(num) {
+    return (num < 10 ? '0' : '') + num;
+  }
+
+  function ymdOf(date) {
+    return date.getFullYear() + '-' + pad2(date.getMonth() + 1) + '-' + pad2(date.getDate());
+  }
+
+  /* Monday..Sunday of the week the given date falls in, as local YYYY-MM-DD. */
+  function weekRangeOf(date) {
+    var monday = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    // getDay(): Sunday 0 .. Saturday 6; the week starts on Monday.
+    var shift = (monday.getDay() + 6) % 7;
+    monday.setDate(monday.getDate() - shift);
+    var sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    return { start: ymdOf(monday), end: ymdOf(sunday) };
+  }
+
+  /* One string per week, the guard key for "moved once this week". */
+  function weekKeyOf(date) {
+    return weekRangeOf(date).start;
+  }
+
+  /*
+   * Is the task scheduled inside the given week? dueDay is a local calendar
+   * day; dueWithTime is a timestamp and is read as the local day it falls on.
+   * Deliberately not "this week or earlier": a backlog full of stale due
+   * dates must not pour into the project list the moment the option goes on.
+   */
+  function dueInWeek(info, range) {
+    if (!info) {
+      return false;
+    }
+    var day = null;
+    if (typeof info.dueDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(info.dueDay)) {
+      day = info.dueDay;
+    } else if (typeof info.dueWithTime === 'number' && isFinite(info.dueWithTime)) {
+      day = ymdOf(new Date(info.dueWithTime));
+    }
+    return !!day && day >= range.start && day <= range.end;
+  }
+
+  /*
+   * Which backlog tasks move to the project list this pass, and the updated
+   * per-week memory. A task moves at most once per week: putting it back in
+   * the backlog (by hand, or the app's end-of-day sweep) keeps it there until
+   * the next week. Entries from other weeks are dropped.
+   */
+  function planDueMoves(order, taskInfos, movedOut, date) {
+    var range = weekRangeOf(date);
+    var week = range.start;
+    var memory = {};
+    Object.keys(movedOut || {}).forEach(function (taskId) {
+      if (movedOut[taskId] === week) {
+        memory[taskId] = week;
+      }
+    });
+    var moveIds = [];
+    (order || []).forEach(function (taskId) {
+      var info = taskInfos ? taskInfos[taskId] : null;
+      if (!info || info.isDone || memory[taskId]) {
+        return;
+      }
+      if (dueInWeek(info, range)) {
+        moveIds.push(taskId);
+        memory[taskId] = week;
+      }
+    });
+    return { moveIds: moveIds, movedOut: memory };
+  }
+
   /* The adopted marks restricted to tasks still in the backlog. */
   function pruneAdopted(adopted, backlogTaskIds) {
     var present = {};
@@ -663,10 +754,10 @@ var BacklogSectionsCore = (function () {
   }
 
   /*
-   * The order the backlog should have: the tasks without a section first —
-   * that is where new tasks arrive and where they are sorted from — then one
-   * block per section in section order. Inside a block the current relative
-   * order is kept.
+   * The order the backlog should have: one block per section in section
+   * order, then the tasks without a section at the bottom — which is also
+   * where the app appends tasks that arrive in the backlog on their own.
+   * Inside a block the current relative order is kept.
    */
   function desiredOrder(backlogTaskIds, project) {
     var order = Array.isArray(backlogTaskIds) ? backlogTaskIds : [];
@@ -683,11 +774,11 @@ var BacklogSectionsCore = (function () {
         loose.push(taskId);
       }
     });
-    var out = loose;
+    var out = [];
     project.sections.forEach(function (section) {
       out = out.concat(buckets[section.id]);
     });
-    return out;
+    return out.concat(loose);
   }
 
   /*
@@ -801,6 +892,10 @@ var BacklogSectionsCore = (function () {
     inferMembership: inferMembership,
     pruneMembership: pruneMembership,
     ASSIGN_STORAGE_KEY: ASSIGN_STORAGE_KEY,
+    weekRangeOf: weekRangeOf,
+    weekKeyOf: weekKeyOf,
+    dueInWeek: dueInWeek,
+    planDueMoves: planDueMoves,
     normalizeListName: normalizeListName,
     matchSectionByListName: matchSectionByListName,
     parseAssignPayload: parseAssignPayload,

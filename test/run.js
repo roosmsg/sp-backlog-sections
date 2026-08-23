@@ -32,7 +32,7 @@ const MEMBERSHIP = { a1: 'next', a2: 'next', b1: 'later', b2: 'later' };
 // What the core functions work with: the shared sections plus one project's memberships.
 const PROJECT_CFG = { sections: SECTIONS, membership: MEMBERSHIP };
 const CONFIG = { version: 2, sections: SECTIONS, projects: { p1: { membership: MEMBERSHIP } }, headerButton: true };
-const ORDER = ['u1', 'a1', 'a2', 'b1', 'b2'];
+const ORDER = ['a1', 'a2', 'b1', 'b2', 'u1'];
 
 const projects = (order) => [
   { id: 'p1', title: 'Inbox', taskIds: ['m1'], backlogTaskIds: order || ORDER.slice(), isEnableBacklog: true },
@@ -179,11 +179,11 @@ test('normalizeConfig: preset sections follow their emoji, names of your own do 
 });
 
 test('desiredOrder, blocks and pruneMembership', () => {
-  assert.deepStrictEqual(core.desiredOrder(['u1', 'b2', 'a2', 'b1', 'a1'], PROJECT_CFG), ['u1', 'a2', 'a1', 'b2', 'b1']);
+  assert.deepStrictEqual(core.desiredOrder(['u1', 'b2', 'a2', 'b1', 'a1'], PROJECT_CFG), ['a2', 'a1', 'b2', 'b1', 'u1']);
   assert.deepStrictEqual(core.blocks(ORDER, PROJECT_CFG), [
-    { sectionId: null, taskIds: ['u1'] },
     { sectionId: 'next', taskIds: ['a1', 'a2'] },
     { sectionId: 'later', taskIds: ['b1', 'b2'] },
+    { sectionId: null, taskIds: ['u1'] },
   ]);
   assert.deepStrictEqual(core.blocks(['a1', 'u1', 'a2'], PROJECT_CFG).map((b) => b.sectionId), ['next', null, 'next']);
   assert.deepStrictEqual(core.pruneMembership(PROJECT_CFG.membership, ['a1', 'b2', 'zz']), { a1: 'next', b2: 'later' });
@@ -193,20 +193,20 @@ test('desiredOrder, blocks and pruneMembership', () => {
 
 test('inferMembership: moved tasks adopt their neighbours, boundaries read as "under the next header"', () => {
   const infer = (after, moved, kind) => core.inferMembership(ORDER, after, PROJECT_CFG, moved || null, kind || null);
-  assert.deepStrictEqual(infer(['u1', 'a2', 'b1', 'a1', 'b2']), { a2: 'next', b1: 'later', a1: 'later', b2: 'later' }, 'into the middle of Later');
-  assert.deepStrictEqual(infer(['u1', 'a2', 'a1', 'b1', 'b2']).a1, 'next', 'to the end of its own section: stays');
-  assert.deepStrictEqual(infer(['u1', 'a1', 'a2', 'b2', 'b1']).b2, 'later', 'to the top of its own section: stays');
-  assert.deepStrictEqual(infer(['a1', 'a2', 'u1', 'b1', 'b2']).u1, 'later', 'dropped on a boundary: under the next header');
-  assert.strictEqual(infer(['a1', 'u1', 'a2', 'b1', 'b2'], ['a1']).a1, undefined, 'to the very top: above every section, so no section');
-  assert.strictEqual(infer(['a1', 'a2', 'b1', 'b2', 'u1']).u1, 'later', 'to the very end: the last section');
-  assert.deepStrictEqual(infer(['u1', 'a1', 'a2', 'b1', 'b2', 'n1']).n1, undefined, 'new task without a hint: no section');
+  assert.deepStrictEqual(infer(['a2', 'b1', 'a1', 'b2', 'u1']), { a2: 'next', b1: 'later', a1: 'later', b2: 'later' }, 'into the middle of Later');
+  assert.deepStrictEqual(infer(['a2', 'a1', 'b1', 'b2', 'u1']).a1, 'next', 'to the end of its own section: stays');
+  assert.deepStrictEqual(infer(['a1', 'a2', 'b2', 'b1', 'u1']).b2, 'later', 'to the top of its own section: stays');
+  assert.deepStrictEqual(infer(['a1', 'a2', 'u1', 'b1', 'b2'], ['u1']).u1, 'later', 'dropped on a boundary: under the next header');
+  assert.strictEqual(infer(['u1', 'a1', 'a2', 'b1', 'b2'], ['u1']).u1, 'next', 'to the very top: the first section');
+  assert.strictEqual(infer(['a1', 'a2', 'b1', 'u1', 'b2'], ['b2']).b2, undefined, 'to the very end, below the loose block: no section');
+  assert.strictEqual(infer(['a1', 'a2', 'b2', 'b1'], ['b1'], 'drag').b1, 'later', 'at the bottom of the last block, no loose tasks after it: stays');
+  assert.deepStrictEqual(infer(['a1', 'a2', 'b1', 'b2', 'u1', 'n1']).n1, undefined, 'new task without a hint: no section');
   // With the host's move hint the ambiguity of a one-step swap disappears.
   assert.deepStrictEqual(infer(['a1', 'a2', 'b1', 'u1', 'b2'], ['u1']), { a1: 'next', a2: 'next', b1: 'later', b2: 'later', u1: 'later' });
-  assert.deepStrictEqual(infer(['a1', 'a2', 'b1', 'u1', 'b2'], ['b2']), { a1: 'next', a2: 'next', b1: 'later' }, 'b2 moved below the loose task: leaves its section');
   // A task new to the backlog is placed like a moved one when the user
   // dropped it there, and stays without a section when the app moved it.
-  assert.deepStrictEqual(infer(['u1', 'a1', 'n1', 'a2', 'b1', 'b2'], ['n1'], 'drag').n1, 'next');
-  assert.strictEqual(infer(['u1', 'a1', 'n1', 'a2', 'b1', 'b2'], ['n1']).n1, undefined);
+  assert.deepStrictEqual(infer(['a1', 'n1', 'a2', 'b1', 'b2', 'u1'], ['n1'], 'drag').n1, 'next');
+  assert.strictEqual(infer(['a1', 'n1', 'a2', 'b1', 'b2', 'u1'], ['n1']).n1, undefined);
   assert.deepStrictEqual(core.lcs(['a', 'b', 'c', 'd'], ['b', 'a', 'c', 'd']).length, 3);
 });
 
@@ -247,23 +247,23 @@ test('loads the way the host loads it and registers hooks, the config handler an
 test('the section shortcuts move the task in hand one section up or down', async () => {
   const host = await startHost({ focusedTask: TASKS.find((t) => t.id === 'u1') });
   const membership = () => stored(host).projects.p1.membership;
-  // "u1" has no section, the block on top: down from there is the first section.
-  await host.shortcuts['section-down'].onExec();
+  // "u1" has no section, the block at the bottom: up from there is the last section.
+  await host.shortcuts['section-up'].onExec();
+  await host.settle();
+  assert.strictEqual(membership().u1, 'later');
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a1', 'a2', 'b1', 'b2', 'u1'], 'the backlog follows');
+  await host.shortcuts['section-up'].onExec();
   await host.settle();
   assert.strictEqual(membership().u1, 'next');
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['u1', 'a1', 'a2', 'b1', 'b2'], 'the backlog follows');
+  await host.shortcuts['section-up'].onExec();
+  await host.settle();
+  assert.strictEqual(membership().u1, 'next', 'the first section is the top');
   await host.shortcuts['section-down'].onExec();
   await host.settle();
   assert.strictEqual(membership().u1, 'later');
   await host.shortcuts['section-down'].onExec();
   await host.settle();
-  assert.strictEqual(membership().u1, 'later', 'the last section is the bottom');
-  await host.shortcuts['section-up'].onExec();
-  await host.settle();
-  assert.strictEqual(membership().u1, 'next');
-  await host.shortcuts['section-up'].onExec();
-  await host.settle();
-  assert.strictEqual(membership().u1, undefined, 'and up from the first section: no section again');
+  assert.strictEqual(membership().u1, undefined, 'and down from the last section: no section again');
   // A task the backlog does not hold is left alone.
   const other = await startHost({ focusedTask: TASKS.find((t) => t.id === 'm1') });
   await other.shortcuts['section-down'].onExec();
@@ -273,9 +273,9 @@ test('the section shortcuts move the task in hand one section up or down', async
 
 test('start-up: a backlog that is out of section order is put in order once, with one write and a recognised echo', async () => {
   const host = await startHost({ projects: projects(['b2', 'u1', 'a1', 'b1', 'a2']) });
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['u1', 'a1', 'a2', 'b2', 'b1']);
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a1', 'a2', 'b2', 'b1', 'u1']);
   assert.strictEqual(host.writes().length, 1, 'one write, the echo causes no second one');
-  assert.deepStrictEqual(host.writes()[0].args, ['p1', { backlogTaskIds: ['u1', 'a1', 'a2', 'b2', 'b1'] }]);
+  assert.deepStrictEqual(host.writes()[0].args, ['p1', { backlogTaskIds: ['a1', 'a2', 'b2', 'b1', 'u1'] }]);
   assert.strictEqual(host.calls.filter((c) => c.method === 'persistDataSynced').length, 0, 'memberships unchanged: nothing persisted');
   const tidy = await startHost();
   assert.strictEqual(tidy.writes().length, 0, 'an ordered backlog is left alone');
@@ -284,17 +284,17 @@ test('start-up: a backlog that is out of section order is put in order once, wit
 
 test('drag in the backlog: the moved task changes section, memberships are persisted, no reorder needed', async () => {
   const host = await startHost();
-  await host.userDragsInBacklog('p1', 'a1', ['u1', 'a2', 'b1', 'a1', 'b2']);
+  await host.userDragsInBacklog('p1', 'a1', ['a2', 'b1', 'a1', 'b2', 'u1']);
   assert.deepStrictEqual(stored(host).projects.p1.membership, { a2: 'next', b1: 'later', a1: 'later', b2: 'later' });
   assert.strictEqual(host.writes().length, 0, 'the order already matches the sections');
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['u1', 'a2', 'b1', 'a1', 'b2']);
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a2', 'b1', 'a1', 'b2', 'u1']);
   // A task without a section, dropped between the last Next task and the
   // first Later task, sits under the Later header…
   await host.userDragsInBacklog('p1', 'u1', ['a2', 'u1', 'b1', 'a1', 'b2']);
   assert.strictEqual(stored(host).projects.p1.membership.u1, 'later');
-  // …and dragged back above everything it has no section again.
+  // …and dragged above everything it joins the first section.
   await host.userDragsInBacklog('p1', 'u1', ['u1', 'a2', 'b1', 'a1', 'b2']);
-  assert.strictEqual(stored(host).projects.p1.membership.u1, undefined);
+  assert.strictEqual(stored(host).projects.p1.membership.u1, 'next');
   assert.strictEqual(host.writes().length, 0);
 });
 
@@ -307,7 +307,7 @@ test('drag to a boundary: the hinted task is the one that moved, even when the o
   // b1 dragged up between the two Next tasks: it leaves Later for Next, and
   // the tasks it landed between keep their section.
   const host2 = await startHost();
-  await host2.userDragsInBacklog('p1', 'b1', ['u1', 'a1', 'b1', 'a2', 'b2']);
+  await host2.userDragsInBacklog('p1', 'b1', ['a1', 'b1', 'a2', 'b2', 'u1']);
   const m = stored(host2).projects.p1.membership;
   assert.strictEqual(m.b1, 'next');
   assert.strictEqual(m.a2, 'next');
@@ -316,26 +316,26 @@ test('drag to a boundary: the hinted task is the one that moved, even when the o
 
 test('moving a task from the main list into the backlog: placed where it was dropped, appended ones stay loose', async () => {
   const host = await startHost();
-  await host.userMovesToBacklog('p1', 'm1', ['u1', 'a1', 'm1', 'a2', 'b1', 'b2']);
+  await host.userMovesToBacklog('p1', 'm1', ['a1', 'm1', 'a2', 'b1', 'b2', 'u1']);
   assert.strictEqual(stored(host).projects.p1.membership.m1, 'next');
   assert.strictEqual(host.writes().length, 0);
   const host2 = await startHost();
-  await host2.userMovesToBacklog('p1', 'm1', ['m1', 'u1', 'a1', 'a2', 'b1', 'b2']);
-  assert.strictEqual(stored(host2).projects.p1.membership.m1, undefined, 'dropped above everything: no section');
+  await host2.userMovesToBacklog('p1', 'm1', ['m1', 'a1', 'a2', 'b1', 'b2', 'u1']);
+  assert.strictEqual(stored(host2).projects.p1.membership.m1, 'next', 'dropped above everything: the first section');
   assert.strictEqual(host2.writes().length, 0);
 });
 
 test('a task the app puts in the backlog itself stays out of every section', async () => {
   const host = await startHost();
   // The app adds it at the top of the backlog.
-  await host.taskArrivesInBacklog('p1', 'n1', ['n1', 'u1', 'a1', 'a2', 'b1', 'b2']);
+  await host.taskArrivesInBacklog('p1', 'n1', ['n1', 'a1', 'a2', 'b1', 'b2', 'u1']);
   assert.strictEqual(stored(host).projects.p1.membership.n1, undefined, 'no section');
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['n1', 'u1', 'a1', 'a2', 'b1', 'b2'], 'and it stays where the app put it, in the block on top');
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a1', 'a2', 'b1', 'b2', 'n1', 'u1'], 'and the enforcement moves it into the loose block at the bottom');
 });
 
 test('a silent change (task removed from the backlog) prunes the membership and reorders nothing', async () => {
   const host = await startHost();
-  await host.backlogChangedSilently('p1', ['u1', 'a1', 'b1', 'b2']);
+  await host.backlogChangedSilently('p1', ['a1', 'b1', 'b2', 'u1']);
   assert.deepStrictEqual(stored(host).projects.p1.membership, { a1: 'next', b1: 'later', b2: 'later' });
   assert.strictEqual(host.writes().length, 0);
 });
@@ -346,11 +346,10 @@ test('changes made on the settings page are enforced without a restart', async (
   // reloads the configuration and reorders the backlog accordingly.
   const next = JSON.parse(JSON.stringify(CONFIG));
   next.sections.unshift({ id: 'now', name: 'Now' });
-  next.projects.p1.membership.b1 = 'next';
-  next.projects.p1.membership.u1 = 'later';
+  next.projects.p1.membership.a1 = 'later';
   await host.api.persistDataSynced(JSON.stringify(next));
   await host.settle();
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a1', 'a2', 'b1', 'u1', 'b2'], 'inside a block the order the app had is kept');
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a2', 'a1', 'b1', 'b2', 'u1'], 'inside a block the order the app had is kept');
   assert.strictEqual(host.writes().length, 1);
 });
 
@@ -371,14 +370,14 @@ test('a refused write is logged, the plugin keeps working and the write guard bo
   const host = await startHost();
   host.failUpdateFor.add('p1');
   const next = JSON.parse(JSON.stringify(CONFIG));
-  next.projects.p1.membership.u1 = 'later';
+  next.projects.p1.membership.b2 = 'next';
   await host.api.persistDataSynced(JSON.stringify(next));
   await host.settle();
   assert.ok(host.logs.some((l) => l.level === 'err'));
   assert.strictEqual(host.logs.filter((l) => l.level === 'hook-error').length, 0);
   host.failUpdateFor.clear();
-  await host.userDragsInBacklog('p1', 'a2', ['u1', 'a2', 'a1', 'b1', 'b2']);
-  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a2', 'a1', 'u1', 'b1', 'b2'], 'the pending membership change is now enforced');
+  await host.userDragsInBacklog('p1', 'a2', ['a2', 'a1', 'b1', 'b2', 'u1']);
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a2', 'a1', 'b2', 'b1', 'u1'], 'the pending membership change is now enforced');
 });
 
 // ---- headers in the backlog panel -----------------------------------------------------------
@@ -404,26 +403,26 @@ const headersOf = (doc) =>
 test('headers: one per block before its first row, with name and count; loose tasks get their own header', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Next 2]', 'a1', 'a2', '[Later 2]', 'b1', 'b2']);
+    assert.deepStrictEqual(headersOf(doc), ['[Next 2]', 'a1', 'a2', '[Later 2]', 'b1', 'b2', '[No section 1]', 'u1']);
     assert.ok(doc.getElementById('backlog-sections-style'), 'stylesheet injected');
     const observer = FakeMutationObserver.instances[0];
     assert.ok(observer && observer.observing);
 
     // The app re-renders the rows (drag): after the move the headers follow.
-    await host.userDragsInBacklog('p1', 'a1', ['u1', 'a2', 'b1', 'a1', 'b2']);
-    doc.setRows(['u1', 'a2', 'b1', 'a1', 'b2']);
+    await host.userDragsInBacklog('p1', 'a1', ['a2', 'b1', 'a1', 'b2', 'u1']);
+    doc.setRows(['a2', 'b1', 'a1', 'b2', 'u1']);
     observer.trigger();
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Next 1]', 'a2', '[Later 3]', 'b1', 'a1', 'b2']);
+    assert.deepStrictEqual(headersOf(doc), ['[Next 1]', 'a2', '[Later 3]', 'b1', 'a1', 'b2', '[No section 1]', 'u1']);
 
     // Leaving the project removes the headers; coming back restores them.
     await host.userOpensContext({ id: 'p2', type: 'PROJECT', title: 'Other', taskIds: [] });
     doc.setRows(['x1', 'x2']);
     observer.trigger();
-    assert.deepStrictEqual(headersOf(doc), ['[No section 2]', 'x1', 'x2', '[Next 0]', '[Later 0]'], 'the same sections, empty, in a project without memberships');
+    assert.deepStrictEqual(headersOf(doc), ['[Next 0]', '[Later 0]', '[No section 2]', 'x1', 'x2'], 'the same sections, empty, in a project without memberships');
     await host.userOpensContext(CONTEXT_P1);
-    doc.setRows(['u1', 'a2', 'b1', 'a1', 'b2']);
+    doc.setRows(['a2', 'b1', 'a1', 'b2', 'u1']);
     observer.trigger();
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Next 1]', 'a2', '[Later 3]', 'b1', 'a1', 'b2']);
+    assert.deepStrictEqual(headersOf(doc), ['[Next 1]', 'a2', '[Later 3]', 'b1', 'a1', 'b2', '[No section 1]', 'u1']);
 
     // A pass that changes nothing writes nothing — that is what keeps the
     // observer from feeding itself (every text write is a mutation it sees).
@@ -438,7 +437,7 @@ test('headers: one per block before its first row, with name and count; loose ta
     assert.strictEqual(FakeElement.textWrites, before);
 
     host.unloadFn();
-    assert.deepStrictEqual(headersOf(doc), ['u1', 'a2', 'b1', 'a1', 'b2']);
+    assert.deepStrictEqual(headersOf(doc), ['a2', 'b1', 'a1', 'b2', 'u1']);
     assert.strictEqual(doc.getElementById('backlog-sections-style'), null);
     assert.strictEqual(observer.observing, false);
   });
@@ -453,15 +452,15 @@ test('headers: a section without tasks here still gets a header, in its place in
     { id: 'later', name: 'Later' },
   ];
   const config = { version: 2, sections: sections, projects: { p1: { membership: { a1: 'now', b1: 'later' } } }, headerButton: true };
-  await withHostDom(['u1', 'a1', 'b1'], async (doc) => {
-    await startHost({ projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['u1', 'a1', 'b1'], isEnableBacklog: true }], storedConfig: config });
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Now 1]', 'a1', '[Next 0]', '[Later 1]', 'b1']);
+  await withHostDom(['a1', 'b1', 'u1'], async (doc) => {
+    await startHost({ projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['a1', 'b1', 'u1'], isEnableBacklog: true }], storedConfig: config });
+    assert.deepStrictEqual(headersOf(doc), ['[Now 1]', 'a1', '[Next 0]', '[Later 1]', 'b1', '[No section 1]', 'u1']);
   });
-  // Trailing empty sections land at the end, in section order.
+  // Trailing empty sections sit directly above the loose block at the end.
   const trailing = { version: 2, sections: sections, projects: { p1: { membership: { a1: 'now' } } }, headerButton: true };
-  await withHostDom(['u1', 'a1'], async (doc) => {
-    await startHost({ projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['u1', 'a1'], isEnableBacklog: true }], storedConfig: trailing });
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Now 1]', 'a1', '[Next 0]', '[Later 0]']);
+  await withHostDom(['a1', 'u1'], async (doc) => {
+    await startHost({ projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['a1', 'u1'], isEnableBacklog: true }], storedConfig: trailing });
+    assert.deepStrictEqual(headersOf(doc), ['[Now 1]', 'a1', '[Next 0]', '[Later 0]', '[No section 1]', 'u1']);
   });
 });
 
@@ -472,41 +471,42 @@ test('drag into a section without tasks: the empty section on that boundary wins
     { id: 'later', name: 'Later' },
   ];
   const config = () => ({ version: 2, sections: sections, projects: { p1: { membership: { t1: 'now', t2: 'later' } } }, headerButton: true });
-  const project = () => ({ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['u1', 't1', 't2'], isEnableBacklog: true });
-  await withHostDom(['u1', 't1', 't2'], async (doc) => {
+  const project = () => ({ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['t1', 't2', 'u1'], isEnableBacklog: true });
+  await withHostDom(['t1', 't2', 'u1'], async (doc) => {
     const host = await startHost({ projects: [project()], storedConfig: config() });
     // "Next" holds nothing here, so its header has no rows to drop between:
     // the boundary between "Now" and "Later" is its only target.
-    assert.deepStrictEqual(headersOf(doc), ['[No section 1]', 'u1', '[Now 1]', 't1', '[Next 0]', '[Later 1]', 't2']);
+    assert.deepStrictEqual(headersOf(doc), ['[Now 1]', 't1', '[Next 0]', '[Later 1]', 't2', '[No section 1]', 'u1']);
     await host.userDragsInBacklog('p1', 'u1', ['t1', 'u1', 't2']);
     assert.deepStrictEqual(stored(host).projects.p1.membership, { t1: 'now', u1: 'next', t2: 'later' }, 'the empty section receives its first task');
     assert.strictEqual(host.writes().length, 0, 'the dropped order already matches the sections');
   });
-  // A drop inside the block on top stays there: no empty section in between.
-  await withHostDom(['u1', 'z1', 't1', 't2'], async () => {
+  // A drop inside the loose block at the bottom stays there: no empty
+  // section in between.
+  await withHostDom(['t1', 't2', 'u1', 'z1'], async () => {
     const host = await startHost({
-      projects: [{ ...project(), backlogTaskIds: ['u1', 'z1', 't1', 't2'] }],
+      projects: [{ ...project(), backlogTaskIds: ['t1', 't2', 'u1', 'z1'] }],
       storedConfig: config(),
     });
-    await host.userDragsInBacklog('p1', 'z1', ['z1', 'u1', 't1', 't2']);
+    await host.userDragsInBacklog('p1', 'z1', ['t1', 't2', 'z1', 'u1']);
     assert.deepStrictEqual(stored(host).projects.p1.membership, { t1: 'now', t2: 'later' });
   });
 });
 
 test('the keyboard moves: to the top is the first section, to the bottom is no section', async () => {
   const host = await startHost();
-  // "Move to bottom" puts a task in the last section.
-  await host.userMovesInBacklog('p1', 'a1', ['u1', 'a2', 'b1', 'b2', 'a1'], '[Project] Move Task to Bottom in Backlog');
-  assert.strictEqual(stored(host).projects.p1.membership.a1, 'later');
-  // "Move to top" takes it out of every section: the block on top.
-  await host.userMovesInBacklog('p1', 'a1', ['a1', 'u1', 'a2', 'b1', 'b2'], '[Project] Move Task to Top in Backlog');
+  // "Move to bottom" takes a task out of every section: the loose block.
+  await host.userMovesInBacklog('p1', 'a1', ['a2', 'b1', 'b2', 'u1', 'a1'], '[Project] Move Task to Bottom in Backlog');
   assert.strictEqual(stored(host).projects.p1.membership.a1, undefined);
+  // "Move to top" puts it in the first section.
+  await host.userMovesInBacklog('p1', 'a1', ['a1', 'a2', 'b1', 'b2', 'u1'], '[Project] Move Task to Top in Backlog');
+  assert.strictEqual(stored(host).projects.p1.membership.a1, 'next');
   // "Move up" from the top row of a block is one section up, in one press.
-  await host.userMovesInBacklog('p1', 'b1', ['a1', 'u1', 'a2', 'b1', 'b2'], '[Project] Move Task Up in Backlog');
+  await host.userMovesInBacklog('p1', 'b1', ['a1', 'a2', 'b1', 'b2', 'u1'], '[Project] Move Task Up in Backlog');
   assert.strictEqual(stored(host).projects.p1.membership.b1, 'next');
-  // Below the top row of its block it only reorders: b1 is the second row of
+  // Below the top row of its block it only reorders: b1 is a later row of
   // Next now, so moving it up keeps it there.
-  await host.userMovesInBacklog('p1', 'b1', ['a1', 'u1', 'b1', 'a2', 'b2'], '[Project] Move Task Up in Backlog');
+  await host.userMovesInBacklog('p1', 'b1', ['a1', 'b1', 'a2', 'b2', 'u1'], '[Project] Move Task Up in Backlog');
   assert.strictEqual(stored(host).projects.p1.membership.b1, 'next');
 });
 
@@ -520,7 +520,7 @@ test('a task dropped on a header lands in that section, empty or not', async () 
   const project = { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['t1', 't2', 't3'], isEnableBacklog: true };
   await withHostDom(['t1', 't2', 't3'], async (doc) => {
     const host = await startHost({ projects: [project], storedConfig: config });
-    assert.deepStrictEqual(headersOf(doc), ['[No section 3]', 't1', 't2', 't3', '[Short 0]', '[Mid 0]', '[Long 0]']);
+    assert.deepStrictEqual(headersOf(doc), ['[Short 0]', '[Mid 0]', '[Long 0]', '[No section 3]', 't1', 't2', 't3']);
     const list = doc.backlogList;
 
     // The CDK clones the dragged row into a placeholder that keeps the row's
@@ -543,7 +543,7 @@ test('a task dropped on a header lands in that section, empty or not', async () 
 
     await host.userDragsInBacklog('p1', 't3', ['t1', 't3', 't2']);
     assert.deepStrictEqual(stored(host).projects.p1.membership, { t3: 'long' }, 'the section the user pointed at');
-    assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['t1', 't2', 't3'], 'and the backlog is put in that order');
+    assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['t3', 't1', 't2'], 'and the backlog is put in that order');
   });
 
   // The whole band counts: released over a task row of the loose block, the
@@ -598,12 +598,12 @@ test('headers: several empty sections in a row settle down and stay put', async 
     { id: 'cal', name: 'Calendar' },
   ];
   const config = { version: 2, sections: sections, projects: { p1: { membership: { t1: 'short' } } }, headerButton: true };
-  await withHostDom(['t2', 't3', 't1'], async (doc) => {
+  await withHostDom(['t1', 't2', 't3'], async (doc) => {
     await startHost({
-      projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['t2', 't3', 't1'], isEnableBacklog: true }],
+      projects: [{ id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['t1', 't2', 't3'], isEnableBacklog: true }],
       storedConfig: config,
     });
-    const expected = ['[No section 2]', 't2', 't3', '[Short 1]', 't1', '[Mid 0]', '[Long 0]', '[Calendar 0]'];
+    const expected = ['[Short 1]', 't1', '[Mid 0]', '[Long 0]', '[Calendar 0]', '[No section 2]', 't2', 't3'];
     assert.deepStrictEqual(headersOf(doc), expected);
     const observer = FakeMutationObserver.instances[0];
     const moves = () => doc.backlogList.children.map((c) => (c.tagName === 'task' ? c.id : c.getAttribute('data-backlog-sections-header')));
@@ -904,7 +904,7 @@ test('a published assignment lands the imported task in its section on start-up'
     assert.strictEqual(cfg.projects.p1.membership.i1, 'next');
     assert.strictEqual(cfg.projects.p1.adopted.i1, true);
     // The backlog follows: i1 moves into the Next block.
-    assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['u1', 'i1', 'a1', 'a2', 'b1', 'b2']);
+    assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['i1', 'a1', 'a2', 'b1', 'b2', 'u1']);
     // The plain task stays unsectioned and unmarked.
     assert.strictEqual(cfg.projects.p1.membership.u1, undefined);
     assert.strictEqual(cfg.projects.p1.adopted.u1, undefined);
@@ -946,6 +946,74 @@ test('without a published payload (or disabled) nothing is placed, no tasks fetc
     assert.strictEqual(stored(host).projects.p1.membership.i1, undefined);
     assert.strictEqual(host.calls.filter((c) => c.method === 'getTasks').length, 0);
   });
+});
+
+// ---- moving due tasks out of the backlog ------------------------------------------------------
+
+const ymd = (date) => {
+  const pad = (n) => (n < 10 ? '0' : '') + n;
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate());
+};
+const TODAY = new Date();
+const TODAY_YMD = ymd(TODAY);
+const NEXT_WEEK_YMD = ymd(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() + 8));
+
+test('planDueMoves picks this week, once per week, and forgets old weeks', () => {
+  const monday = core.weekRangeOf(TODAY).start;
+  const infos = {
+    due: { dueDay: TODAY_YMD, dueWithTime: null, isDone: false },
+    timed: { dueDay: null, dueWithTime: TODAY.getTime(), isDone: false },
+    next: { dueDay: NEXT_WEEK_YMD, dueWithTime: null, isDone: false },
+    done: { dueDay: TODAY_YMD, dueWithTime: null, isDone: true },
+    plain: { dueDay: null, dueWithTime: null, isDone: false },
+  };
+  const first = core.planDueMoves(['due', 'timed', 'next', 'done', 'plain'], infos, { stale: '2020-01-06' }, TODAY);
+  assert.deepStrictEqual(first.moveIds, ['due', 'timed']);
+  assert.deepStrictEqual(first.movedOut, { due: monday, timed: monday });
+  // Already moved this week: stays put, even though it is due.
+  const second = core.planDueMoves(['due'], infos, first.movedOut, TODAY);
+  assert.deepStrictEqual(second.moveIds, []);
+  assert.strictEqual(second.movedOut.due, monday);
+});
+
+test('a backlog task due this week moves to the top of the project list', async () => {
+  const tasks = TASKS.map((t) => (t.id === 'b1' ? { ...t, dueDay: TODAY_YMD } : t));
+  const host = await startHost({ tasks, storedConfig: { ...CONFIG, moveDueThisWeek: true } });
+  assert.deepStrictEqual(host.project('p1').taskIds, ['b1', 'm1'], 'moved to the front of the list');
+  assert.ok(!host.project('p1').backlogTaskIds.includes('b1'), 'gone from the backlog');
+  const cfg = stored(host);
+  assert.strictEqual(cfg.projects.p1.movedOut.b1, core.weekRangeOf(TODAY).start);
+  assert.strictEqual(cfg.projects.p1.membership.b1, undefined, 'membership pruned with the move');
+  // The remaining backlog is still in section order.
+  assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['a1', 'a2', 'b2', 'u1']);
+});
+
+test('a task put back in the backlog stays there for the rest of the week', async () => {
+  const tasks = TASKS.map((t) => (t.id === 'b1' ? { ...t, dueDay: TODAY_YMD } : t));
+  const monday = core.weekRangeOf(TODAY).start;
+  const config = {
+    ...CONFIG,
+    moveDueThisWeek: true,
+    projects: { p1: { membership: MEMBERSHIP, movedOut: { b1: monday } } },
+  };
+  const host = await startHost({ tasks, storedConfig: config });
+  assert.ok(host.project('p1').backlogTaskIds.includes('b1'), 'moved again despite the weekly guard');
+  assert.deepStrictEqual(host.project('p1').taskIds, ['m1']);
+});
+
+test('with the option off, due dates change nothing', async () => {
+  const tasks = TASKS.map((t) => (t.id === 'b1' ? { ...t, dueDay: TODAY_YMD } : t));
+  const host = await startHost({ tasks });
+  assert.deepStrictEqual(host.project('p1').taskIds, ['m1']);
+  assert.ok(host.project('p1').backlogTaskIds.includes('b1'));
+});
+
+test('the settings page toggles the due-task move', async () => {
+  const screen = await startScreen();
+  const checkbox = screen.app.find((n) => n.getAttribute && n.getAttribute('id') === 'opt-move-due');
+  assert.ok(checkbox, 'move-due checkbox not rendered');
+  await screen.change(checkbox, true);
+  assert.strictEqual(screen.storedConfig().moveDueThisWeek, true);
 });
 
 // ---- run --------------------------------------------------------------------------------------------

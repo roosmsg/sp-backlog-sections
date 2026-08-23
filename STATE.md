@@ -4,7 +4,37 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.8.0)
+## What exists (2026-08-23, v2.9.0)
+
+- v2.9.0 (user requests 2026-08-23) brings two changes:
+  - **The "no section" block sits at the bottom again**, reverting the
+    v2.6.0 placement. Everything keyed to the layout flipped with it:
+    desiredOrder (sections first, loose last — which also matches where the
+    app appends new backlog tasks, so fewer enforcement writes),
+    sectionStops ([...sections, null]), keyboard 'top' = first section and
+    'bottom' = no section, a drop above every row = the first block's
+    section, and decorate() anchors trailing empty-section headers above the
+    loose block (the reverse sweep seeds `following` with the null block's
+    start). The empty-section boundary rule now applies strictly BETWEEN two
+    blocks: at the very top it does not scan (a drag to the top of an
+    all-loose backlog must not fall into an empty section — found by the
+    "never written" test); an empty section at the top is reached by
+    dropping on its header. With no loose tasks there is no loose drop zone;
+    the keyboard 'bottom' move is the way out of the last section.
+  - **Move due tasks out of the backlog** (option `moveDueThisWeek`,
+    default off): a backlog task whose dueDay/dueWithTime falls in the
+    current Monday–Sunday week moves to the TOP of the project's taskIds —
+    once per task per week (per-project `movedOut` {taskId: weekKey} in the
+    config, pruned to the backlog and to the current week), so putting it
+    back keeps it there until next week. Stale overdue dates from earlier
+    weeks deliberately stay put. Runs at the head of every reconcile (the
+    write patches taskIds + backlogTaskIds in ONE updateProject; its echo
+    runs the section pass), plus a half-hourly sweep and one at start-up /
+    after a config reload — the sweep exists because a due date passing or
+    a week rolling over changes no backlog order. taskInfos now carries
+    {issueId, dueDay, dueWithTime, isDone} for all tasks.
+    NOTE: updateProject writing taskIds is typia-valid but not yet verified
+    live — verify the move lands correctly in the running app.
 
 - v2.8.0 (reworked from v2.7.0 on user request: the feature and its option
   belong to the To Do plugin, this side only executes) adds **automatic
