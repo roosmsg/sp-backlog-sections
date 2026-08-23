@@ -39,6 +39,35 @@
   };
   var HINT_MAX_AGE_MS = 2000;
 
+  // Every delayed pass goes through these, so onUnload can cancel what is
+  // still pending — a timer surviving unload would let a dead instance write
+  // into the page (and, in the tests, into the next test's document).
+  var pendingTimeouts = [];
+  var sweepInterval = null;
+
+  function later(fn, ms) {
+    var id = setTimeout(function () {
+      var at = pendingTimeouts.indexOf(id);
+      if (at !== -1) {
+        pendingTimeouts.splice(at, 1);
+      }
+      fn();
+    }, ms);
+    pendingTimeouts.push(id);
+    return id;
+  }
+
+  function cancelPending() {
+    pendingTimeouts.forEach(function (id) {
+      clearTimeout(id);
+    });
+    pendingTimeouts = [];
+    if (sweepInterval) {
+      clearInterval(sweepInterval);
+      sweepInterval = null;
+    }
+  }
+
   var WRITE_LIMIT = 10;
   var WRITE_WINDOW_MS = 5000;
 
@@ -435,7 +464,9 @@
       // in the pass.
       var hint = moveHints[project.id];
       var asked = hint && hint.kind && hint.kind !== 'drag' && Date.now() - hint.at <= HINT_MAX_AGE_MS;
-      if (known && core.sameList(known, order) && !pendingWrites[project.id] && !asked) {
+      var drop = dropOnHeader[project.id];
+      var dropped = drop && Date.now() - drop.at <= DROP_MAX_AGE_MS;
+      if (known && core.sameList(known, order) && !pendingWrites[project.id] && !asked && !dropped) {
         return;
       }
       var regular = Array.isArray(project.taskIds) ? project.taskIds : [];
@@ -596,7 +627,7 @@
         decorate();
       });
     }
-    setTimeout(decorate, 250);
+    later(decorate, 250);
   }
 
   function ensureStyle(doc) {
@@ -683,7 +714,11 @@
   var COLLAPSED_ATTR = 'data-backlog-sections-collapsed';
 
   function fillHeader(header, projectId, block, project) {
-    var isDown = isCollapsed(projectId, sectionKey(block.sectionId));
+    var key = sectionKey(block.sectionId);
+    // The effective state: a section sprung open for the running drag shows
+    // as open — arrow down, rows visible — even though its stored state is
+    // still collapsed.
+    var isDown = isCollapsed(projectId, key) && !dragOpenKeys[key];
     if (isDown) {
       if (header.getAttribute(COLLAPSED_ATTR) !== '1') {
         header.setAttribute(COLLAPSED_ATTR, '1');
@@ -879,7 +914,7 @@
     if (!key || dragOpenKeys[key] || !isCollapsed(activeProjectId, key)) {
       return;
     }
-    hoverOpenTimer = setTimeout(function () {
+    hoverOpenTimer = later(function () {
       hoverOpenTimer = null;
       dragOpenKeys[key] = true;
       debug('hover-opened section', key);
@@ -912,6 +947,12 @@
         at: Date.now(),
       };
       debug('dropped on header', draggedTaskId, targetHeader.getAttribute(HEADER_ATTR));
+      // A release over a collapsed header usually leaves the row where it
+      // came from — and an unchanged order makes the host dispatch nothing,
+      // so no hook would ever apply this drop. Run a pass of our own; when
+      // the host does dispatch, that pass consumes the hint first and this
+      // one finds nothing left to do.
+      later(reloadAllProjects, 150);
     }
     stopDragTracking();
   }
@@ -1528,7 +1569,7 @@
         // Not awaited by design: the host awaits onReady and the first pass
         // over all projects may write a few orders.
         reloadAllProjects().then(sweepDueTasks);
-        setInterval(sweepDueTasks, DUE_SWEEP_INTERVAL_MS);
+        sweepInterval = setInterval(sweepDueTasks, DUE_SWEEP_INTERVAL_MS);
       });
     });
   }
@@ -1551,6 +1592,7 @@
       moveHints = {};
       dropOnHeader = {};
       stopDragTracking();
+      cancelPending();
       stopClickListeners();
       closeSettings();
     });

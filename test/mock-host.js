@@ -216,6 +216,7 @@ class MockHost {
 
   /* Evaluate plugin.js exactly as PluginRunner does. */
   loadPlugin(code) {
+    MockHost.instances.push(this);
     const fn = new Function('plugin', 'PluginAPI', `'use strict';\ntry {\n${code}\n} catch (error) { throw error; }`);
     fn(this.api, this.api);
   }
@@ -324,5 +325,7 @@ class MockHost {
     return this.settle();
   }
 }
+
+MockHost.instances = [];
 
 module.exports = { MockHost, HOOKS, translate, TRANSLATIONS, MOVE_IN_BACKLOG, MOVE_TO_BACKLOG };

@@ -391,6 +391,18 @@ async function withHostDom(taskIds, fn) {
   try {
     await fn(doc);
   } finally {
+    // Unload every plugin instance started so far: a pending decorate timer
+    // from an earlier host must not write into the next test's document.
+    MockHost.instances.forEach((h) => {
+      if (typeof h.unloadFn === 'function') {
+        try {
+          h.unloadFn();
+        } catch (e) {
+          /* teardown only */
+        }
+      }
+    });
+    MockHost.instances.length = 0;
     delete global.document;
     delete global.MutationObserver;
     delete global.window;
@@ -625,8 +637,11 @@ test('headers: a collapsed section springs open under a resting drag and folds b
     layout(doc.backlogList);
     doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
     assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'not before the rest delay');
+    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron still closed');
     await sleep(650);
     assert.deepStrictEqual(hidden(), [], 'sprung open under the resting pointer');
+    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▾', 'chevron follows the sprung-open state');
+    assert.ok(!later.hasAttribute('data-backlog-sections-collapsed'), 'header no longer marked collapsed');
 
     // Release there: the drop lands in the section.
     doc.dispatch('pointerup', {});
@@ -637,6 +652,31 @@ test('headers: a collapsed section springs open under a resting drag and folds b
     // The refold is scheduled; after it fires the rows are hidden again.
     await sleep(300);
     assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'folded back after the drag, with the new member inside');
+    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron closed again');
+  });
+});
+
+test('a drop on a collapsed header lands even when the host dispatches nothing', async () => {
+  // The CDK puts the row back where it came from when nothing visibly
+  // reordered — the real situation over a collapsed section — and then no
+  // backlog action fires at all. The plugin's own pass applies the drop.
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const placeholder = doc.createElement('task');
+    placeholder.className = 'cdk-drag-placeholder';
+    placeholder.setAttribute('data-task-id', 'u1');
+    doc.backlogList.appendChild(placeholder);
+    FakeMutationObserver.instances[0].trigger();
+    layout(doc.backlogList);
+    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
+    doc.dispatch('pointerup', {});
+    doc.backlogList.removeChild(placeholder);
+    // No userDragsInBacklog: the host stays silent. The plugin's own
+    // scheduled pass (150 ms) picks the drop up.
+    await sleep(450);
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'the drop was applied without any host action');
   });
 });
 

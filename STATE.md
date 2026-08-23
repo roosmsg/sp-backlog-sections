@@ -4,7 +4,27 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.12.0)
+## What exists (2026-08-23, v2.13.0)
+
+- v2.13.0 (live findings from the user, 2026-08-23) — dropping on a
+  collapsed section finally works without expanding anything:
+  - **Header drops are applied by the plugin's own pass.** Live behaviour:
+    a release over a collapsed header leaves the CDK order unchanged, and
+    the host then dispatches NO backlog action at all — so the recorded
+    dropOnHeader hint was never consumed and the drop silently did nothing.
+    onDragEnd now schedules reloadAllProjects (150 ms) itself, and the
+    reconcileFromProjects skip-guard lets a project with a fresh drop hint
+    through even when the order is unchanged. When the host does dispatch,
+    the hook pass consumes the hint first and the scheduled pass is a no-op.
+  - **The chevron follows the effective state**: a section sprung open for
+    the drag shows ▾/aria-expanded=true (fillHeader uses the effective
+    open state, not the stored one) — live report was that the arrow never
+    turned down.
+  - **Unload cancels pending timers** (later()/cancelPending wrappers for
+    reapplySoon, hover-open, the own drop pass; the due sweep interval gets
+    a handle). Production hygiene, and it fixed cross-test pollution where a
+    dead instance's 250 ms decorate wrote into the next test's document
+    (test harness now also unloads every MockHost instance per DOM test).
 
 - v2.12.0 (user report: v2.11.0's open-everything-on-drag is unusable with a
   large backlog): **spring-loaded sections**. During a drag everything stays
