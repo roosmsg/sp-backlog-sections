@@ -666,7 +666,12 @@
       '.' + HEADER_CLASS + '.' + TARGET_CLASS + ', .' + HEADER_CLASS + '.' + TARGET_CLASS + ':hover' +
       ' { background: transparent !important; color: var(--text-color, inherit) !important; border-radius: 4px; opacity: 1;' +
       ' outline: 2px dashed var(--text-color-muted, rgba(128,128,128,.6)); outline-offset: -2px; }\n' +
-      'task[' + HIDDEN_ATTR + '="1"] { display: none !important; }';
+      'task[' + HIDDEN_ATTR + '="1"] { display: none !important; }\n' +
+      // While a drag runs every row folds away — only the headers (and the
+      // CDK preview following the pointer) stay — so the headers stack into a
+      // compact list of drop targets. A rule on the list, not marks on the
+      // rows: the app re-renders rows during a drag and would drop the marks.
+      LIST_SELECTOR + '.' + DRAGGING_CLASS + ' > task { display: none !important; }';
     (doc.head || doc.body).appendChild(style);
   }
 
@@ -1061,10 +1066,10 @@
         if (header.nextSibling !== first) {
           list.insertBefore(header, first);
         }
-        // While a drag runs every section folds, so the headers sit close
-        // together as a compact list of drop targets; the stored collapse
-        // state comes back the moment the drag ends.
-        var hide = dragging || isCollapsed(activeProjectId, key);
+        // The drag fold is a stylesheet rule on the list (see ensureStyle);
+        // the rows themselves only carry the stored collapse state, so there
+        // is nothing to restore when the drag ends.
+        var hide = isCollapsed(activeProjectId, key);
         if (hide) {
           debug('collapse: hiding', key, block.taskIds.length);
         }

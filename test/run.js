@@ -665,13 +665,19 @@ test('headers: every section folds while a drag runs and reopens after', async (
     assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
 
     // A drag starts: EVERY section folds — the headers become a compact list
-    // of drop targets — and every chevron shows closed.
+    // of drop targets — and every chevron shows closed. The fold itself is a
+    // stylesheet rule keyed on the list's drag class (the app re-renders rows
+    // mid-drag and would shed per-row marks), so the rows keep only their
+    // stored collapse marks.
     const placeholder = doc.createElement('task');
     placeholder.className = 'cdk-drag-placeholder';
     placeholder.setAttribute('data-task-id', 'u1');
     doc.backlogList.appendChild(placeholder);
     FakeMutationObserver.instances[0].trigger();
-    assert.deepStrictEqual(hidden(), ['a1', 'a2', 'b1', 'b2', 'u1'], 'everything folded during the drag');
+    assert.ok(doc.backlogList.className.includes('bs-dragging'), 'the list carries the drag class');
+    const css = doc.getElementById('backlog-sections-style').textContent;
+    assert.ok(css.includes('.bs-dragging > task { display: none !important; }'), 'the fold rule hides every row while dragging');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'row marks still reflect only the stored collapse state');
     assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▸', 'expanded section shows closed while dragging');
 
     layout(doc.backlogList);
@@ -682,6 +688,7 @@ test('headers: every section folds while a drag runs and reopens after', async (
     await sleep(300);
     assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'released on the band: dropped into the section');
     assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'stored state is back: only the collapsed section hides, member inside');
+    assert.ok(!doc.backlogList.className.includes('bs-dragging'), 'the drag class is gone');
     assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▾', 'expanded section open again');
   });
 });

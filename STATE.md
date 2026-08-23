@@ -4,7 +4,23 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.16.0)
+## What exists (2026-08-23, v2.17.0)
+
+- v2.17.0 (live finding, screenshot from the user): v2.16.0's fold was done
+  by setting the hidden attribute on rows — but the app RE-RENDERS rows
+  during a CDK drag, dropping the marks and the injected headers, and the
+  plugin's decorate can lag behind (mutation storm, brake), so the "Zonder
+  sectie" header vanished and its rows appeared under the previous section.
+  The fold is now a **stylesheet rule keyed on the list's drag class**:
+  `.task-list-inner[data-id="BACKLOG"].bs-dragging > task { display:none
+  !important }` (the CDK preview lives outside the list and keeps
+  following the pointer; the source row is display:none by the CDK anyway).
+  Rows keep only their stored collapse marks, so nothing per-row has to be
+  restored after the drag; the class comes off in stopDragTracking (our
+  capture-phase pointerup runs before the CDK's drop handling). Still open:
+  headers wiped by a mid-drag re-render come back only on the next decorate
+  pass — if that proves visible, give decorate a drag-time exemption from
+  the brake or re-insert headers from onDragMove.
 
 - v2.16.0 (user request 2026-08-23): **every section folds while a drag
   runs** — the headers stack into a compact list of drop targets (the
