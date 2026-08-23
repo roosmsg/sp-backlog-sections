@@ -6,27 +6,23 @@
     "NO_SECTION": "No section",
     "HEADER_BUTTON": "Backlog sections",
     "COLLAPSE": "Collapse section",
-    "EXPAND": "Expand section"
+    "EXPAND": "Expand section",
+    "SHORTCUT_UP": "Move task to the section above",
+    "SHORTCUT_DOWN": "Move task to the section below"
   },
   "UI": {
     "TITLE": "Backlog Sections",
-    "INTRO": "Named sections inside a project's backlog. A header sits above each section's tasks in the backlog panel; drag a task under another header to move it there. Sections and memberships are stored by the plugin; the app's tasks are only reordered, never changed.",
+    "INTRO": "One set of named sections, used by the backlog of every project. Each backlog shows every section as a header above its tasks; put a task in a section there, by dragging it under a header or with the keyboard shortcuts for moving a task. Which task sits in which section is kept per project. Sections and memberships are stored by the plugin; the app’s tasks are only reordered, never changed.",
     "LOADING": "Loading…",
     "STATUS": {
       "SAVED": "Saved.",
       "SAVE_FAILED": "Saving failed: {{error}}",
       "LOAD_FAILED": "The settings could not be loaded: {{error}}"
     },
-    "PROJECT": {
-      "LABEL": "Project",
-      "NO_PROJECTS": "No projects yet.",
-      "BACKLOG_OFF": "The backlog is switched off for this project (project settings → Enable backlog). Sections are kept but not shown until it is on.",
-      "BACKLOG_EMPTY": "This backlog is empty."
-    },
     "SECTIONS": {
       "HEADING": "Sections",
-      "HINT": "In this order from the top of the backlog; tasks without a section come last.",
-      "EMPTY": "No sections yet for this project.",
+      "HINT": "One list for every project, in this order from the top of the backlog; tasks without a section come last. Which tasks are in a section is decided in the project backlog itself, not here.",
+      "EMPTY": "No sections yet.",
       "NAME_PLACEHOLDER": "Section name",
       "ADD": "Add section",
       "NEW_NAME": "New section",
@@ -35,20 +31,22 @@
       "DOWN": "Move down",
       "DELETE": "Delete",
       "DELETE_CONFIRM_TITLE": "Delete section?",
-      "DELETE_CONFIRM_BODY": "The section \"{{name}}\" is removed. Its {{count}} tasks stay in the backlog, without a section.",
-      "COUNT_ONE": "1 task",
-      "COUNT_MANY": "{{count}} tasks"
-    },
-    "TASKS": {
-      "HEADING": "Backlog tasks",
-      "HINT": "Put a task in a section here, or drag it under the section's header in the backlog panel.",
-      "NO_SECTION": "No section",
-      "SECTION_LABEL": "Section of \"{{title}}\""
+      "DELETE_CONFIRM_BODY": "The section \"{{name}}\" is removed from every project. Its {{count}} tasks stay in their backlog, without a section.",
+      "PRESET": {
+        "ADD": "Add the standard sections",
+        "HINT": "Adds the four horizon sections at once; a section with the same name is left alone.",
+        "SHORT_TERM": "💪 Short term",
+        "MID_TERM": "☀️ Medium term",
+        "LONG_TERM": "💫 Long term",
+        "CALENDAR": "🎞️ Scheduled in the calendar"
+      }
     },
     "OPTIONS": {
       "HEADING": "Behaviour",
       "HEADER_BUTTON": "Show the Backlog sections button in the app header",
-      "HEADER_BUTTON_HINT": "The button appears in project views and opens this page for the current project. A change takes effect after the app restarts."
+      "HEADER_BUTTON_HINT": "The button appears in project views and opens this page. A change takes effect after a restart of the app.",
+      "CLICK_SELECTS": "One click selects a task, two clicks edit its name",
+      "CLICK_SELECTS_HINT": "Without this, clicking a task name opens it for editing straight away. The option applies everywhere in the app, not only in the backlog."
     },
     "BUTTONS": {
       "CANCEL": "Cancel",

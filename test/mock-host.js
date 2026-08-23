@@ -70,6 +70,9 @@ class MockHost {
     this.projects = clone(options.projects || []);
     this.tasks = clone(options.tasks || []);
     this.storage = {};
+    this.shortcuts = {};
+    this.embedded = false;
+    this.focusedTask = options.focusedTask || null;
     if (options.storedConfig !== undefined) {
       this.storage[''] =
         typeof options.storedConfig === 'string' ? options.storedConfig : JSON.stringify(options.storedConfig);
@@ -185,10 +188,29 @@ class MockHost {
       showIndexHtmlAsView() {
         record('showIndexHtmlAsView');
       },
+      showInWorkContext() {
+        record('showInWorkContext');
+        host.embedded = true;
+      },
+      closeWorkContextView() {
+        record('closeWorkContextView');
+        host.embedded = false;
+      },
+      async getFocusedTask() {
+        record('getFocusedTask');
+        return host.focusedTask ? clone(host.focusedTask) : null;
+      },
+      async getSelectedTask() {
+        record('getSelectedTask');
+        return host.focusedTask ? clone(host.focusedTask) : null;
+      },
       registerHeaderButton: (...a) => record('registerHeaderButton', ...a),
       registerMenuEntry: (...a) => record('registerMenuEntry', ...a),
       registerSidePanelButton: (...a) => record('registerSidePanelButton', ...a),
-      registerShortcut: (...a) => record('registerShortcut', ...a),
+      registerShortcut(cfg) {
+        record('registerShortcut', cfg.id);
+        host.shortcuts[cfg.id] = cfg;
+      },
     };
   }
 
@@ -256,6 +278,17 @@ class MockHost {
     return this.settle();
   }
 
+  /* A keyboard move in the backlog: same hooks, another action type. */
+  userMovesInBacklog(projectId, taskId, newOrder, actionType) {
+    const project = this.project(projectId);
+    project.backlogTaskIds = newOrder.slice();
+    this.fireHook(HOOKS.PROJECT_LIST_UPDATE, { action: actionType, projectState: this.projectState() });
+    this.fireHook(HOOKS.ACTION, {
+      action: { type: actionType, taskId, workContextId: projectId, doneBacklogTaskIds: [] },
+    });
+    return this.settle();
+  }
+
   /* Drag from the main list into the backlog at a position. */
   userMovesToBacklog(projectId, taskId, newOrder) {
     const project = this.project(projectId);
@@ -265,6 +298,16 @@ class MockHost {
     this.fireHook(HOOKS.ACTION, {
       action: { type: MOVE_TO_BACKLOG, taskId, afterTaskId: null, workContextId: projectId },
     });
+    return this.settle();
+  }
+
+  /* The app moves a task into the backlog by itself (a new task, end of day). */
+  taskArrivesInBacklog(projectId, taskId, newOrder) {
+    const project = this.project(projectId);
+    project.backlogTaskIds = newOrder.slice();
+    const type = '[Project] Auto Move Task from regular to backlog';
+    this.fireHook(HOOKS.PROJECT_LIST_UPDATE, { action: type, projectState: this.projectState() });
+    this.fireHook(HOOKS.ACTION, { action: { type, taskId, projectId } });
     return this.settle();
   }
 

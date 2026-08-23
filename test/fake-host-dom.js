@@ -19,6 +19,7 @@ class FakeElement {
     this.className = '';
     this.title = '';
     this.type = '';
+    this.rect = null;
   }
   get id() {
     return this.attrs.id || '';
@@ -53,6 +54,18 @@ class FakeElement {
     child.parentNode = null;
     return child;
   }
+  getBoundingClientRect() {
+    return this.rect || { top: 0, height: 0, bottom: 0, left: 0, right: 0, width: 0 };
+  }
+  get previousSibling() {
+    if (!this.parentNode) return null;
+    const siblings = this.parentNode.children;
+    const index = siblings.indexOf(this);
+    return (index > 0 && siblings[index - 1]) || null;
+  }
+  get lastChild() {
+    return this.children[this.children.length - 1] || null;
+  }
   get nextSibling() {
     if (!this.parentNode) return null;
     const siblings = this.parentNode.children;
@@ -78,6 +91,21 @@ class FakeElement {
   }
   matches(selector) {
     return matchCompound(this, selector);
+  }
+  closest(selector) {
+    let node = this;
+    while (node && node.tagName) {
+      if (matchCompound(node, selector)) return node;
+      node = node.parentNode;
+    }
+    return null;
+  }
+  focus() {
+    this.focused = true;
+  }
+  dispatchEvent(event) {
+    for (const fn of (this.listeners[event.type] || []).slice()) fn(event);
+    return true;
   }
   querySelector(selector) {
     return this.querySelectorAll(selector)[0] || null;
@@ -119,6 +147,16 @@ class FakeDocument {
   constructor() {
     this.body = new FakeElement('body', this);
     this.head = new FakeElement('head', this);
+    this.listeners = {};
+  }
+  addEventListener(type, fn) {
+    (this.listeners[type] = this.listeners[type] || []).push(fn);
+  }
+  removeEventListener(type, fn) {
+    this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn);
+  }
+  dispatch(type, event) {
+    for (const fn of (this.listeners[type] || []).slice()) fn({ type, ...event });
   }
   createElement(tag) {
     return new FakeElement(tag, this);
@@ -196,4 +234,17 @@ class FakeStorage {
   }
 }
 
-module.exports = { FakeElement, FakeDocument, backlogDocument, FakeMutationObserver, FakeStorage };
+/* Give every child of the backlog list a rectangle, top to bottom. */
+function layout(list, rowHeight = 20) {
+  let top = 0;
+  list.rect = { top: 0, height: 0, bottom: 0, left: 0, right: 100, width: 100 };
+  for (const child of list.children) {
+    const height = child.tagName === 'task' ? rowHeight : rowHeight / 2;
+    child.rect = { top, height, bottom: top + height, left: 0, right: 100, width: 100 };
+    top += height;
+  }
+  list.rect.height = top;
+  list.rect.bottom = top;
+}
+
+module.exports = { FakeElement, FakeDocument, backlogDocument, FakeMutationObserver, FakeStorage, layout };

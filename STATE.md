@@ -4,10 +4,13 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v1.0.0)
+## What exists (2026-08-23, v2.3.0)
 
-- `src/core.js` — config normalisation (`{version, projects: {id: {sections,
-  membership}}, headerButton}`), membership inference (LCS, or the host's
+- `src/core.js` — config normalisation (`{version: 2, sections: [{id, name}],
+  projects: {id: {membership}}, headerButton}`; v1's per-project section lists
+  are merged by name on load, memberships remapped; `projectView(config, id)`
+  hands the rest of the code `{sections, membership}` so nothing below it
+  knows the list is shared), membership inference (LCS, or the host's
   move hint; boundary rule: own section wins, else the following header),
   desired order (sections in order, loose tasks last), blocks, pruning.
 - `src/plugin.js` — hooks PROJECT_LIST_UPDATE (+ one-tick defer), ACTION
@@ -18,14 +21,113 @@ Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same toolin
   device) into `.task-list-inner[data-id="BACKLOG"]` before `task#t-<id>`
   rows via MutationObserver (sync, before paint). Header button
   (`view_agenda`, PROJECT) and config handler both open the page.
+- v2.6.1: the config handler (the gear on the plugin card) opens the page as
+  a route again. It is pressed from the settings screen, where there is no
+  work view for showInWorkContext to mount into, so the page only appeared
+  after the user opened a project by hand. The header button keeps the embed
+  toggle.
+- v2.6.0: the block without a section is the first one, not the last
+  (desiredOrder, sectionStops = [null, ...sections], 'top' = no section,
+  'bottom' = the last section, a drop above every row = no section, and the
+  headers of empty sections are swept in from the end). Plus the option
+  clickSelectsTask (default on): a capture-phase click listener on the
+  document swallows the click on a task-title and focuses the row instead,
+  and a dblclick re-dispatches a flagged synthetic click so the app opens its
+  editor. task-title.component.ts turns a click into edit mode itself, which
+  is what this replaces.
+- v2.5.0: preset emoji are 💪 ☀️ 💫 🎞️; core.RENAMED_SECTIONS renames exactly the
+  four old preset names (EN+NL) on load, so sections added earlier follow
+  without touching their ids or any name the user typed.
+- v2.4.2: fixes the freeze v2.4.1 introduced. Two adjacent empty headers
+  anchored to the same row swapped places on every pass; with v2.4.1 also
+  treating own removals as foreign, every swap asked for another pass. Empty
+  headers are now placed bottom-up, each directly above what must follow it
+  (stable), own removals are ours again, and decorate() has a brake (60 passes
+  per second, then a 2s pause) so no future mistake can lock up the app.
+- v2.4.1: the collapse toggle reads activeProjectId at click time (a header
+  outlives the project it was drawn for — the app re-renders the rows around
+  it, not the header itself — so the captured id collapsed the wrong project);
+  the state is mirrored on the header (data-backlog-sections-collapsed), a
+  rAF + 250ms pass re-applies it after a click, and any removal in the list is
+  now treated as foreign so a cleared list is redrawn.
+- v2.4.0: '[Project] Auto Move Task from regular to backlog' is no longer a
+  move hint, and inferMembership only treats a hinted newcomer as placed when
+  the kind is 'drag' — a task the app puts in the backlog itself (new task,
+  end of day) stays without a section instead of joining the first one.
+- v2.3.1: headers 1.2rem / min-height 40px (48 while dragging); the target
+  band also marks its rows (data-backlog-sections-in-target, inset bar); the
+  band lookup ignores x, allows 24px slack and falls back to the first header
+  above the list; drop hints live 8s. Header colours are pinned with
+  !important for :hover/:focus/:focus-within because the app paints rows in
+  the theme accent (pink in the user’s theme) and the header sits in that list.
+- v2.3.0: a section owns the band from its header to the next one, so a drop
+  anywhere in it counts (headerAt picks the last header above the pointer);
+  the list gets .bs-dragging during a drag (min-height on the headers).
+  'up'/'down' from the edge of a block step one section (core.stepSection /
+  edgeOfBlock / sectionStops), inside a block they only reorder; an explicit
+  move command with an unchanged order (the ends of the backlog) is still
+  read as a move — reconcileFromProjects no longer skips such a project.
+- v2.2.0: headers are drop targets — a CDK drag is tracked from the moment
+  its placeholder appears (pointermove/up on the document, capture), the
+  header under the pointer gets .bs-target, and a release over it records
+  dropOnHeader{taskId,key} which beats every inference rule (applyHeaderDrop).
+  The dragged task id comes from the placeholder/preview clone's
+  data-task-id. Two shortcuts (section-up / section-down, registerShortcut)
+  move the focused/selected task through the sections, "no section" last.
+  The header button toggles the page as a work-view embed
+  (showInWorkContext / closeWorkContextView; fallback showIndexHtmlAsView),
+  and leaving the project closes it.
+- v2.1.0: settings page is only the shared section list (project picker and
+  per-task assignment removed — the user assigns in the backlog itself);
+  action types corrected against the host source ('[Project] Auto Move Task
+  from regular to backlog'), each action mapped to a kind (drag/up/down/top/
+  bottom) that inferMembership uses: top = first section, bottom = no section;
+  a drop on a boundary where an empty section sits fills that empty section
+  (firstEmptySectionBetween) — the only way to seed one; logError also writes
+  to console.error; debug trace behind localStorage 'backlog-sections:debug'.
+  The CDK-placeholder idea was dropped: inside one list the CDK sorts with
+  transforms and leaves the placeholder at its start position in the DOM, and
+  geometry cannot separate two stacked empty headers either.
+- v2.0.0: one shared section list for all projects, membership stays per
+  project; headers are drawn for sections without tasks in this project too
+  (anchored above the next block's header); the drop target is read from the
+  CDK drag placeholder (`.cdk-drag-placeholder`, `dropHints`) so a drop into
+  an empty section is exact — the neighbour inference is the fallback;
+  headers larger (1.05rem since v2.2.1; the .bs-target
+  highlight uses --bg plus a dashed --divider-color outline, never an accent).
+- v1.1.0: preset sections (`core.PRESET_SECTION_KEYS` + `addPresetSections`,
+  duplicate names skipped case-insensitively) with a button on the settings
+  page; names resolved in the app language (EN: Short term / Medium term /
+  Long term / Scheduled in the calendar; NL: Korte termijn / Middellange
+  termijn / Lange termijn / Belegd in de agenda, each with the emoji) and then
+  stored as plain text.
 - `src/index.html` — project picker (active first), sections CRUD with
   counts, per-task section select, header-button option; waits for
   PluginAPI; English fallback embedded.
-- `build.js` (copy of Tag Groups', stable zip name), `test/run.js` (21
+- `build.js` (copy of Tag Groups', stable zip name), `test/run.js` (34
   tests, plain node) with `mock-host.js`, `dom-stub.js`, `fake-host-dom.js`.
 - README in English; `.github/workflows` not yet added (see open).
 
-## Host facts relied upon (18.19.0 / 18.20.1 sources)
+## Host facts relied upon (verified against the app sources, 2026-08-23)
+
+- `plugin-hooks.effects.ts`: projectListUpdate$ dispatches
+  `{action: action.type, projectState}` (the plugin-api types say otherwise —
+  the effect is the truth); anyAction$ dispatches `{action}` with the whole
+  action; both are declared in that order, so the list update arrives first.
+- `project.actions.ts`: backlog moves are '[Project] Move Task in Backlog'
+  (taskId, afterTaskId, workContextId), '[Project] Move Task {Up,Down} in
+  Backlog', '[Project] Move Task to {Top,Bottom} in Backlog' (taskId,
+  workContextId, doneBacklogTaskIds), '[Project] Move Task from regular to
+  backlog', '[Project] Auto Move Task from regular to backlog'.
+- `backlog.component.html`: `<task-list listId="PARENT" listModelId="BACKLOG">`
+  → `div.task-list-inner[data-id="BACKLOG"]`; rows are `task#t-<taskId>`
+  (task.component host binding `[id]="taskIdWithPrefix()"`).
+- `plugin-runner.ts`: plugin.js runs in the main window via `new Function`,
+  onReady/onUnload are registered per instance; registerHook has no gate.
+- CDK `single-axis-sort-strategy`: only `enter()` moves the placeholder in
+  the DOM; sorting inside one list uses transforms.
+
+## Earlier host facts (18.19.0 / 18.20.1 sources)
 
 - Backlog rows: `task` with `id="t-<taskId>"` inside
   `.task-list-inner[data-id="BACKLOG"]` (task-list.component.html).

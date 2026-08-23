@@ -144,9 +144,6 @@
         var state = {
           strings: {},
           config: core.createDefaultConfig(),
-          projects: [],
-          tasks: [],
-          projectId: null,
         };
 
         var appEl = document.getElementById('app');
@@ -211,43 +208,8 @@
           statusEl.className = isError ? 'error' : '';
         }
 
-        function currentProject() {
-          for (var i = 0; i < state.projects.length; i++) {
-            if (state.projects[i].id === state.projectId) {
-              return state.projects[i];
-            }
-          }
-          return null;
-        }
-
-        function projectConfig() {
-          return core.getProject(state.config, state.projectId);
-        }
-
-        function editableProjectConfig() {
-          return core.ensureProject(state.config, state.projectId);
-        }
-
-        function backlogOrder() {
-          var project = currentProject();
-          return project && Array.isArray(project.backlogTaskIds) ? project.backlogTaskIds : [];
-        }
-
-        function taskById(id) {
-          for (var i = 0; i < state.tasks.length; i++) {
-            if (state.tasks[i].id === id) {
-              return state.tasks[i];
-            }
-          }
-          return null;
-        }
-
         function sectionName(section) {
           return section.name || t('UI.SECTIONS.UNNAMED');
-        }
-
-        function countText(count) {
-          return t(count === 1 ? 'UI.SECTIONS.COUNT_ONE' : 'UI.SECTIONS.COUNT_MANY', { count: count });
         }
 
         // ---- data ------------------------------------------------------------
@@ -276,47 +238,6 @@
           });
         }
 
-        function loadProjectsAndTasks() {
-          return Promise.all([api.getAllProjects(), api.getTasks()]).then(function (results) {
-            state.projects = (Array.isArray(results[0]) ? results[0] : []).filter(function (p) {
-              return p && typeof p.id === 'string';
-            });
-            state.tasks = Array.isArray(results[1]) ? results[1] : [];
-          });
-        }
-
-        function chooseInitialProject() {
-          var ctxPromise =
-            typeof api.getActiveWorkContext === 'function'
-              ? Promise.resolve()
-                  .then(function () {
-                    return api.getActiveWorkContext();
-                  })
-                  .catch(function () {
-                    return null;
-                  })
-              : Promise.resolve(null);
-          return ctxPromise.then(function (ctx) {
-            var active = ctx && ctx.type === 'PROJECT' ? ctx.id : null;
-            if (active && currentProjectById(active)) {
-              state.projectId = active;
-            } else if (state.projects.length) {
-              state.projectId = state.projects[0].id;
-            }
-          });
-        }
-
-        function currentProjectById(id) {
-          for (var i = 0; i < state.projects.length; i++) {
-            if (state.projects[i].id === id) {
-              return state.projects[i];
-            }
-          }
-          return null;
-        }
-
-        // Normalising before every write keeps the stored shape canonical; the
-        // background script reloads it and enforces the order.
         function save() {
           state.config = core.normalizeConfig(state.config);
           return api
@@ -335,14 +256,17 @@
 
         // ---- actions ---------------------------------------------------------
 
-        function selectProject(projectId) {
-          state.projectId = projectId;
-          render();
-        }
-
         function addSection(name) {
           var trimmed = (name || '').trim() || t('UI.SECTIONS.NEW_NAME');
-          editableProjectConfig().sections.push({ id: core.newSectionId(), name: trimmed });
+          state.config.sections.push({ id: core.newSectionId(), name: trimmed });
+          return saveAndRender();
+        }
+
+        function addPresetSections() {
+          var names = core.PRESET_SECTION_KEYS.map(function (key) {
+            return t(key);
+          });
+          core.addPresetSections(state.config, names);
           return saveAndRender();
         }
 
@@ -356,7 +280,7 @@
         }
 
         function moveSection(section, delta) {
-          var sections = editableProjectConfig().sections;
+          var sections = state.config.sections;
           var index = sections.indexOf(section);
           var target = index + delta;
           if (index < 0 || target < 0 || target >= sections.length) {
@@ -388,11 +312,22 @@
             });
         }
 
+        function sectionTaskCount(sectionId) {
+          var ids = Object.keys(state.config.projects);
+          var count = 0;
+          ids.forEach(function (id) {
+            var membership = core.getProject(state.config, id).membership;
+            Object.keys(membership).forEach(function (taskId) {
+              if (membership[taskId] === sectionId) {
+                count++;
+              }
+            });
+          });
+          return count;
+        }
+
         function deleteSection(section) {
-          var project = projectConfig();
-          var count = Object.keys(project.membership).filter(function (taskId) {
-            return project.membership[taskId] === section.id;
-          }).length;
+          var count = sectionTaskCount(section.id);
           return confirmDialog(
             t('UI.SECTIONS.DELETE_CONFIRM_TITLE'),
             t('UI.SECTIONS.DELETE_CONFIRM_BODY', { name: sectionName(section), count: count }),
@@ -401,27 +336,24 @@
             if (!confirmed) {
               return;
             }
-            var editable = editableProjectConfig();
-            editable.sections = editable.sections.filter(function (s) {
+            state.config.sections = state.config.sections.filter(function (s) {
               return s.id !== section.id;
             });
-            Object.keys(editable.membership).forEach(function (taskId) {
-              if (editable.membership[taskId] === section.id) {
-                delete editable.membership[taskId];
-              }
+            Object.keys(state.config.projects).forEach(function (id) {
+              var membership = state.config.projects[id].membership;
+              Object.keys(membership).forEach(function (taskId) {
+                if (membership[taskId] === section.id) {
+                  delete membership[taskId];
+                }
+              });
             });
             return saveAndRender();
           });
         }
 
-        function setTaskSection(taskId, sectionId) {
-          var editable = editableProjectConfig();
-          if (sectionId) {
-            editable.membership[taskId] = sectionId;
-          } else {
-            delete editable.membership[taskId];
-          }
-          return saveAndRender();
+        function setClickSelectsTask(value) {
+          state.config.clickSelectsTask = !!value;
+          return save();
         }
 
         function setHeaderButton(value) {
@@ -431,34 +363,9 @@
 
         // ---- rendering -------------------------------------------------------
 
-        function renderProjectPicker() {
-          var select = el(
-            'select',
-            {
-              'aria-label': t('UI.PROJECT.LABEL'),
-              onchange: function (event) {
-                selectProject(event.target.value);
-              },
-            },
-            state.projects.map(function (project) {
-              return el('option', { value: project.id, text: project.title || project.id });
-            })
-          );
-          select.value = state.projectId || '';
-          return el('div', { className: 'row', style: 'margin-top: 0' }, [el('span', { className: 'hint', text: t('UI.PROJECT.LABEL') }), select]);
-        }
-
         function renderSections() {
-          var project = projectConfig();
-          var order = backlogOrder();
-          var counts = {};
-          order.forEach(function (taskId) {
-            var sectionId = core.sectionOf(project, taskId);
-            if (sectionId) {
-              counts[sectionId] = (counts[sectionId] || 0) + 1;
-            }
-          });
-          var rows = project.sections.map(function (section, index) {
+          var sections = state.config.sections;
+          var rows = sections.map(function (section, index) {
             return el('div', { className: 'section-row' }, [
               el('input', {
                 type: 'text',
@@ -470,7 +377,6 @@
                   renameSection(section, event.target.value);
                 },
               }),
-              el('span', { className: 'count', text: countText(counts[section.id] || 0) }),
               el('button', {
                 type: 'button',
                 text: '↑',
@@ -486,7 +392,7 @@
                 text: '↓',
                 title: t('UI.SECTIONS.DOWN'),
                 'aria-label': t('UI.SECTIONS.DOWN'),
-                disabled: index === project.sections.length - 1,
+                disabled: index === sections.length - 1,
                 onclick: function () {
                   moveSection(section, 1);
                 },
@@ -527,48 +433,20 @@
                 },
               }),
             ]),
+            el('div', { className: 'row' }, [
+              el('button', {
+                type: 'button',
+                text: t('UI.SECTIONS.PRESET.ADD'),
+                onclick: addPresetSections,
+              }),
+            ]),
+            el('p', { className: 'hint', text: t('UI.SECTIONS.PRESET.HINT') }),
           ]);
-        }
-
-        function renderTasks() {
-          var project = projectConfig();
-          var order = backlogOrder();
-          var children = [el('h2', { text: t('UI.TASKS.HEADING') }), el('p', { className: 'hint', text: t('UI.TASKS.HINT') })];
-          var projectEntity = currentProject();
-          if (projectEntity && projectEntity.isEnableBacklog === false) {
-            children.push(el('p', { className: 'hint', text: t('UI.PROJECT.BACKLOG_OFF') }));
-          }
-          if (!order.length) {
-            children.push(el('p', { className: 'hint', text: t('UI.PROJECT.BACKLOG_EMPTY') }));
-            return el('section', { className: 'card' }, children);
-          }
-          var rows = order.map(function (taskId) {
-            var task = taskById(taskId);
-            var title = task ? task.title : taskId;
-            var select = el(
-              'select',
-              {
-                'aria-label': t('UI.TASKS.SECTION_LABEL', { title: title }),
-                'data-task-id': taskId,
-                onchange: function (event) {
-                  setTaskSection(taskId, event.target.value);
-                },
-              },
-              [el('option', { value: '', text: t('UI.TASKS.NO_SECTION') })].concat(
-                project.sections.map(function (section) {
-                  return el('option', { value: section.id, text: sectionName(section) });
-                })
-              )
-            );
-            select.value = core.sectionOf(project, taskId) || '';
-            return el('div', { className: 'task-row' }, [el('span', { className: 'task-title', text: title }), select]);
-          });
-          children.push(el('div', null, rows));
-          return el('section', { className: 'card' }, children);
         }
 
         function renderOptions() {
           var id = 'opt-header-button';
+          var clickId = 'opt-click-selects';
           return el('section', { className: 'card' }, [
             el('h2', { text: t('UI.OPTIONS.HEADING') }),
             el('div', { className: 'option' }, [
@@ -585,18 +463,26 @@
                 el('div', { className: 'hint', text: t('UI.OPTIONS.HEADER_BUTTON_HINT') }),
               ]),
             ]),
+            el('div', { className: 'option' }, [
+              el('input', {
+                type: 'checkbox',
+                id: clickId,
+                checked: state.config.clickSelectsTask,
+                onchange: function (event) {
+                  setClickSelectsTask(event.target.checked);
+                },
+              }),
+              el('div', null, [
+                el('label', { for: clickId, text: t('UI.OPTIONS.CLICK_SELECTS') }),
+                el('div', { className: 'hint', text: t('UI.OPTIONS.CLICK_SELECTS_HINT') }),
+              ]),
+            ]),
           ]);
         }
 
         function render() {
           var body = [el('h1', { text: t('UI.TITLE') }), el('p', { className: 'hint', text: t('UI.INTRO') })];
-          if (!state.projects.length) {
-            body.push(el('p', { text: t('UI.PROJECT.NO_PROJECTS') }));
-          } else {
-            body.push(renderProjectPicker());
-            body.push(renderSections());
-            body.push(renderTasks());
-          }
+          body.push(renderSections());
           body.push(renderOptions());
           appEl.innerHTML = '';
           appEl.appendChild(el('div', null, body));
@@ -608,9 +494,8 @@
           return loadStrings()
             .then(function () {
               appEl.textContent = t('UI.LOADING');
-              return Promise.all([loadConfig(), loadProjectsAndTasks()]);
+              return loadConfig();
             })
-            .then(chooseInitialProject)
             .then(render)
             .catch(function (error) {
               console.error('[backlog-sections] The settings page could not load.', error);

@@ -9,7 +9,7 @@
 var BacklogSectionsCore = (function () {
   'use strict';
 
-  var CONFIG_VERSION = 1;
+  var CONFIG_VERSION = 2;
 
   function isPlainObject(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -24,27 +24,35 @@ var BacklogSectionsCore = (function () {
   }
 
   function createDefaultConfig() {
-    return { version: CONFIG_VERSION, projects: {}, headerButton: true };
+    return { version: CONFIG_VERSION, sections: [], projects: {}, headerButton: true, clickSelectsTask: true };
   }
 
   function emptyProject() {
-    return { sections: [], membership: {} };
+    return { membership: {} };
   }
 
   /*
-   * One project's sections and memberships, repaired field by field: section
-   * ids unique non-empty strings, names trimmed strings, membership only
-   * string -> existing section id.
+   * Preset sections that were added before their emoji changed. Only these
+   * exact names follow along; a name the user typed or edited is never
+   * touched. Renaming one afterwards simply takes it out of this list.
    */
-  function normalizeProject(raw) {
-    var project = emptyProject();
-    if (!isPlainObject(raw)) {
-      return project;
-    }
+  var RENAMED_SECTIONS = {
+    '🌟 Medium term': '☀️ Medium term',
+    '🌙 Long term': '💫 Long term',
+    '🌟 Middellange termijn': '☀️ Middellange termijn',
+    '🌙 Lange termijn': '💫 Lange termijn',
+  };
+
+  /*
+   * The one list of sections that every project's backlog uses: ids unique
+   * non-empty strings, names trimmed. A bare string counts as a name.
+   */
+  function normalizeSections(raw) {
+    var sections = [];
     var seen = {};
-    var sectionsIn = Array.isArray(raw.sections) ? raw.sections : [];
-    for (var i = 0; i < sectionsIn.length; i++) {
-      var s = sectionsIn[i];
+    var input = Array.isArray(raw) ? raw : [];
+    for (var i = 0; i < input.length; i++) {
+      var s = input[i];
       var id = '';
       var name = '';
       if (typeof s === 'string') {
@@ -59,16 +67,54 @@ var BacklogSectionsCore = (function () {
         id = newSectionId();
       }
       seen[id] = true;
-      project.sections.push({ id: id, name: name });
+      sections.push({ id: id, name: Object.prototype.hasOwnProperty.call(RENAMED_SECTIONS, name) ? RENAMED_SECTIONS[name] : name });
+    }
+    return sections;
+  }
+
+  /* One project: only which task sits in which of the shared sections. */
+  function normalizeProject(raw, knownSectionIds) {
+    var project = emptyProject();
+    if (!isPlainObject(raw)) {
+      return project;
     }
     var membershipIn = isPlainObject(raw.membership) ? raw.membership : {};
     Object.keys(membershipIn).forEach(function (taskId) {
       var sectionId = membershipIn[taskId];
-      if (typeof taskId === 'string' && taskId.trim() && typeof sectionId === 'string' && seen[sectionId]) {
+      if (typeof taskId === 'string' && taskId.trim() && typeof sectionId === 'string' && knownSectionIds[sectionId]) {
         project.membership[taskId.trim()] = sectionId;
       }
     });
     return project;
+  }
+
+  /*
+   * Version 1 kept a sections list per project. They are merged into the one
+   * shared list, by name and case-insensitively, in the order the projects
+   * are read; every project's memberships are remapped onto the merged ids.
+   * Returns { sections, remap: { projectId: { oldId: newId } } }.
+   */
+  function migrateProjectSections(projectsIn) {
+    var sections = [];
+    var byName = {};
+    var remap = {};
+    Object.keys(projectsIn).forEach(function (projectId) {
+      var raw = projectsIn[projectId];
+      if (!isPlainObject(raw)) {
+        return;
+      }
+      var map = {};
+      normalizeSections(raw.sections).forEach(function (section) {
+        var key = section.name.toLowerCase();
+        if (!Object.prototype.hasOwnProperty.call(byName, key)) {
+          byName[key] = section.id;
+          sections.push(section);
+        }
+        map[section.id] = byName[key];
+      });
+      remap[projectId] = map;
+    });
+    return { sections: sections, remap: remap };
   }
 
   function normalizeConfig(raw) {
@@ -87,14 +133,39 @@ var BacklogSectionsCore = (function () {
     if (typeof input.headerButton === 'boolean') {
       config.headerButton = input.headerButton;
     }
+    if (typeof input.clickSelectsTask === 'boolean') {
+      config.clickSelectsTask = input.clickSelectsTask;
+    }
     var projectsIn = isPlainObject(input.projects) ? input.projects : {};
+    var remap = null;
+    if (Array.isArray(input.sections)) {
+      config.sections = normalizeSections(input.sections);
+    } else {
+      var migrated = migrateProjectSections(projectsIn);
+      config.sections = migrated.sections;
+      remap = migrated.remap;
+    }
+    var knownSectionIds = {};
+    config.sections.forEach(function (section) {
+      knownSectionIds[section.id] = true;
+    });
     Object.keys(projectsIn).forEach(function (projectId) {
       if (typeof projectId !== 'string' || !projectId.trim()) {
         return;
       }
-      var project = normalizeProject(projectsIn[projectId]);
-      // An entry without sections and without memberships carries nothing.
-      if (project.sections.length || Object.keys(project.membership).length) {
+      var source = projectsIn[projectId];
+      if (remap && isPlainObject(source) && isPlainObject(source.membership)) {
+        var map = remap[projectId] || {};
+        var moved = {};
+        Object.keys(source.membership).forEach(function (taskId) {
+          var old = source.membership[taskId];
+          moved[taskId] = typeof old === 'string' && map[old] ? map[old] : old;
+        });
+        source = { membership: moved };
+      }
+      var project = normalizeProject(source, knownSectionIds);
+      // An entry without memberships carries nothing.
+      if (Object.keys(project.membership).length) {
         config.projects[projectId.trim()] = project;
       }
     });
@@ -113,6 +184,18 @@ var BacklogSectionsCore = (function () {
     return config.projects[projectId];
   }
 
+  /*
+   * What the rest of the code works with: the shared sections plus one
+   * project's memberships. Everything below takes such a view, so the section
+   * list being global is invisible to the ordering and header logic.
+   */
+  function projectView(config, projectId) {
+    return {
+      sections: (config && Array.isArray(config.sections) ? config.sections : []),
+      membership: getProject(config, projectId).membership,
+    };
+  }
+
   function sectionIndex(project) {
     var index = {};
     project.sections.forEach(function (section, i) {
@@ -128,6 +211,115 @@ var BacklogSectionsCore = (function () {
       return null;
     }
     return Object.prototype.hasOwnProperty.call(sectionIndex(project), sectionId) ? sectionId : null;
+  }
+
+  /*
+   * The sections that hold no task in this order — the ones whose header is
+   * empty in the backlog. A task may be counted out (the one being placed).
+   */
+  function emptySections(project, order, exceptTaskId) {
+    var used = {};
+    (order || []).forEach(function (taskId) {
+      if (taskId === exceptTaskId) {
+        return;
+      }
+      var sectionId = sectionOf(project, taskId);
+      if (sectionId) {
+        used[sectionId] = true;
+      }
+    });
+    return project.sections
+      .filter(function (section) {
+        return !used[section.id];
+      })
+      .map(function (section) {
+        return section.id;
+      });
+  }
+
+  /*
+   * The first section without tasks that sits between two sections in the
+   * configured order — from the start when there is nothing before, up to the
+   * end when there is nothing after. Dropping a task on such a boundary is
+   * the only way to fill an empty section: its header has no rows of its own
+   * to drop between, so the boundary is where the user aims.
+   */
+  function firstEmptySectionBetween(project, order, fromSectionId, toSectionId, taskId) {
+    var index = sectionIndex(project);
+    var from = typeof index[fromSectionId] === 'number' ? index[fromSectionId] + 1 : 0;
+    var to = typeof index[toSectionId] === 'number' ? index[toSectionId] : project.sections.length;
+    if (to <= from) {
+      return null;
+    }
+    var empty = {};
+    emptySections(project, order, taskId).forEach(function (id) {
+      empty[id] = true;
+    });
+    for (var i = from; i < to; i++) {
+      if (empty[project.sections[i].id]) {
+        return project.sections[i].id;
+      }
+    }
+    return null;
+  }
+
+  /*
+   * The stops a task passes when it is moved section by section: "no section"
+   * on top, where the unsorted tasks live, and then every section in order.
+   */
+  function sectionStops(project) {
+    return [null].concat(
+      project.sections.map(function (section) {
+        return section.id;
+      })
+    );
+  }
+
+  /*
+   * Was the task the first (or the last) of the run of tasks that share its
+   * section in this order — the top or the bottom row of its block? That is
+   * what tells a move inside a block from a move out of it.
+   */
+  function edgeOfBlock(order, project, taskId) {
+    var index = (order || []).indexOf(taskId);
+    if (index === -1) {
+      return { first: false, last: false };
+    }
+    var own = sectionOf(project, taskId);
+    var before = index > 0 ? sectionOf(project, order[index - 1]) : null;
+    var after = index < order.length - 1 ? sectionOf(project, order[index + 1]) : null;
+    return {
+      first: index === 0 || before !== own,
+      last: index === order.length - 1 || after !== own,
+    };
+  }
+
+  /*
+   * "Move up" and "move down" from the edge of a block mean one section up or
+   * down — including into a section that holds no task here, which a move by
+   * rows can never reach because it has no rows to stop at. Returns undefined
+   * when the move stays inside the block, so the caller keeps its section.
+   */
+  function stepSection(oldOrder, project, taskId, kind) {
+    var edge = edgeOfBlock(oldOrder, project, taskId);
+    if ((kind === 'up' && !edge.first) || (kind === 'down' && !edge.last)) {
+      return undefined;
+    }
+    var stops = sectionStops(project);
+    var current = stops.indexOf(sectionOf(project, taskId));
+    var next = current + (kind === 'up' ? -1 : 1);
+    if (current === -1 || next < 0 || next >= stops.length) {
+      return undefined;
+    }
+    return stops[next];
+  }
+
+  function firstSectionId(project) {
+    return project.sections.length ? project.sections[0].id : null;
+  }
+
+  function lastSectionId(project) {
+    return project.sections.length ? project.sections[project.sections.length - 1].id : null;
   }
 
   /* Longest common subsequence of two id lists — the tasks that kept their relative place. */
@@ -176,7 +368,7 @@ var BacklogSectionsCore = (function () {
    * is an anchor — exact where the order alone is ambiguous. Returns a new
    * membership object.
    */
-  function inferMembership(oldOrder, newOrder, project, movedIds) {
+  function inferMembership(oldOrder, newOrder, project, movedIds, kind) {
     var before = Array.isArray(oldOrder) ? oldOrder : [];
     var after = Array.isArray(newOrder) ? newOrder : [];
     var known = {};
@@ -188,7 +380,11 @@ var BacklogSectionsCore = (function () {
       var moved = {};
       movedIds.forEach(function (id) {
         moved[id] = true;
-        known[id] = true; // a hinted newcomer is placed like a moved task
+        // Only a task the user dropped somewhere is placed like a moved one.
+        // Anything else that is new to this backlog stays without a section.
+        if (kind === 'drag') {
+          known[id] = true;
+        }
       });
       after.forEach(function (id) {
         if (known[id] && !moved[id]) {
@@ -238,26 +434,86 @@ var BacklogSectionsCore = (function () {
       var nextSection = next ? result[next] || null : null;
       var oldSection = sectionOf(project, id);
       var chosen;
-      if (!prev && !next) {
+      var stepped;
+      // "To the top" and "to the bottom" say where the task belongs without
+      // any inference: above every section, and in the last one.
+      if (kind === 'top') {
+        chosen = null;
+      } else if (kind === 'bottom') {
+        chosen = lastSectionId(project);
+      } else if ((kind === 'up' || kind === 'down') && (stepped = stepSection(before, project, id, kind)) !== undefined) {
+        // Moved off the edge of its block: one section further, no matter how
+        // many empty ones lie between it and the next block of rows.
+        chosen = stepped;
+      } else if ((kind === 'up' || kind === 'down') && sectionOf(project, id) !== null) {
+        chosen = sectionOf(project, id); // moved inside its own block
+      } else if (!prev && !next) {
         chosen = oldSection;
       } else if (!next) {
         chosen = prevSection;
-      } else if (!prev) {
-        chosen = nextSection;
-      } else if (prevSection === nextSection) {
+      } else if (prev && prevSection === nextSection) {
+        // Inside one block: nothing to decide.
         chosen = prevSection;
-      } else if (oldSection === prevSection || oldSection === nextSection) {
-        // On a boundary next to its own section the task stayed in it: moved
-        // to the end or the top of that section, not across.
-        chosen = oldSection;
       } else {
-        chosen = nextSection;
+        // On a boundary. An empty section there is what the user aimed at: it
+        // has no rows to drop between, so the boundary is its only target.
+        // Once it holds a task the ordinary rules apply to it as well.
+        var empty = prev ? firstEmptySectionBetween(project, after, prevSection, nextSection, id) : null;
+        if (empty) {
+          chosen = empty;
+        } else if (!prev) {
+          // Above every row is above every section: the unsorted block.
+          chosen = null;
+        } else if (oldSection === prevSection || oldSection === nextSection) {
+          // On a boundary next to its own section the task stayed in it: moved
+          // to the end or the top of that section, not across.
+          chosen = oldSection;
+        } else {
+          chosen = nextSection;
+        }
       }
       if (chosen) {
         result[id] = chosen;
       }
     }
     return result;
+  }
+
+  /*
+   * The sections the user asked for out of the box: the three horizons plus
+   * the tasks that already have a slot in the calendar. Only the translation
+   * keys live here — the names are resolved in the app language and then
+   * stored as plain text, so renaming one later is an ordinary rename.
+   */
+  var PRESET_SECTION_KEYS = [
+    'UI.SECTIONS.PRESET.SHORT_TERM',
+    'UI.SECTIONS.PRESET.MID_TERM',
+    'UI.SECTIONS.PRESET.LONG_TERM',
+    'UI.SECTIONS.PRESET.CALENDAR',
+  ];
+
+  /*
+   * Append the preset sections that the shared list does not have yet, comparing
+   * names case-insensitively so a second click adds nothing. Mutates the
+   * config and returns the names that were added.
+   */
+  function addPresetSections(config, names) {
+    var have = {};
+    config.sections.forEach(function (section) {
+      have[String(section.name).trim().toLowerCase()] = true;
+    });
+    var added = [];
+    (names || []).forEach(function (name) {
+      var trimmed = String(name || '').trim();
+      var key = trimmed.toLowerCase();
+      if (!trimmed || have[key]) {
+        return;
+      }
+      have[key] = true;
+      config.sections.push({ id: newSectionId(), name: trimmed });
+      added.push(trimmed);
+    });
+    return added;
   }
 
   /* Membership restricted to tasks that are still in the backlog. */
@@ -276,8 +532,9 @@ var BacklogSectionsCore = (function () {
   }
 
   /*
-   * The order the backlog should have: one block per section in section
-   * order, tasks without a section last; inside a block the current relative
+   * The order the backlog should have: the tasks without a section first —
+   * that is where new tasks arrive and where they are sorted from — then one
+   * block per section in section order. Inside a block the current relative
    * order is kept.
    */
   function desiredOrder(backlogTaskIds, project) {
@@ -295,11 +552,11 @@ var BacklogSectionsCore = (function () {
         loose.push(taskId);
       }
     });
-    var out = [];
+    var out = loose;
     project.sections.forEach(function (section) {
       out = out.concat(buckets[section.id]);
     });
-    return out.concat(loose);
+    return out;
   }
 
   /*
@@ -392,13 +649,24 @@ var BacklogSectionsCore = (function () {
   return {
     CONFIG_VERSION: CONFIG_VERSION,
     newSectionId: newSectionId,
+    PRESET_SECTION_KEYS: PRESET_SECTION_KEYS,
+    addPresetSections: addPresetSections,
     createDefaultConfig: createDefaultConfig,
+    normalizeSections: normalizeSections,
     normalizeProject: normalizeProject,
     normalizeConfig: normalizeConfig,
     getProject: getProject,
+    projectView: projectView,
     ensureProject: ensureProject,
     sectionOf: sectionOf,
     lcs: lcs,
+    emptySections: emptySections,
+    firstEmptySectionBetween: firstEmptySectionBetween,
+    firstSectionId: firstSectionId,
+    lastSectionId: lastSectionId,
+    sectionStops: sectionStops,
+    edgeOfBlock: edgeOfBlock,
+    stepSection: stepSection,
     inferMembership: inferMembership,
     pruneMembership: pruneMembership,
     desiredOrder: desiredOrder,
