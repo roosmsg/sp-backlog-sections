@@ -1,4 +1,4 @@
-# Backlog Sections — a Super Productivity plugin
+# Backlog Sections — a [Super Productivity](https://github.com/super-productivity/super-productivity) plugin
 
 Backlog Sections puts named sections inside a project's backlog — the "ruler with a title" the app does not have. You define the sections once and every project's backlog uses the same set; which task sits in which section is kept per project. A header sits above each section in the backlog panel, with the task count and a collapse toggle; drag a task under another header and it moves to that section. Sections and memberships are stored by the plugin; the app's tasks are never changed, only the order of the backlog list.
 
@@ -26,7 +26,7 @@ Backlog Sections puts named sections inside a project's backlog — the "ruler w
 
 ## Installation
 
-Requires Super Productivity 18.19.0 or newer, with the backlog enabled for the project (project settings → *Enable backlog*).
+Requires [Super Productivity](https://github.com/super-productivity/super-productivity) 18.19.0 or newer, with the backlog enabled for the project (project settings → *Enable backlog*).
 
 1. Download **[backlog-sections.zip](https://github.com/roosmsg/super-productivity-backlog-sections/releases/latest/download/backlog-sections.zip)** from the latest [release](https://github.com/roosmsg/super-productivity-backlog-sections/releases), or build it yourself with `node build.js` (see *Development*).
 2. In Super Productivity open **Settings → Plugins** and upload the ZIP. Uploading a newer ZIP with the same plugin id replaces the installed version; the configuration is kept.
