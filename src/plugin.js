@@ -362,10 +362,14 @@
     // section further" looks like, so those are still read as a move. A drag
     // that landed where it started changes nothing at all.
     var explicit = moveKind && moveKind !== 'drag';
+    var sourceSectionId = explicit && movedIds && movedIds.length ? core.sectionOf(project, movedIds[0]) : null;
     var membership =
       !previous || (core.sameList(previous, order) && !explicit)
         ? project.membership
         : core.inferMembership(previous, order, project, movedIds, moveKind);
+    if (explicit && movedIds && movedIds.length) {
+      updateSectionsAfterKeyboardMove(projectId, sourceSectionId, membership[movedIds[0]]);
+    }
     debug('reconcile', projectId, {
       sections: project.sections.length,
       previous: previous,
@@ -642,6 +646,35 @@
 
   function isFlashing(key) {
     return !!(acceptFlash && acceptFlash.key === key && Date.now() - acceptFlash.at < ACCEPT_FLASH_MS);
+  }
+
+  /*
+   * A keyboard move opens the destination so the task stays visible. When it
+   * crosses a section boundary, the section it left folds behind it. Updating
+   * both keys together avoids an intermediate stored state. Only keyboard
+   * paths call this; a drag keeps its existing collapse behaviour.
+   */
+  function updateSectionsAfterKeyboardMove(projectId, sourceSectionId, destinationSectionId) {
+    if (!projectId) {
+      return;
+    }
+    var sourceKey = sectionKey(sourceSectionId || core.DEFAULT_SECTION_ID);
+    var destinationKey = sectionKey(destinationSectionId || core.DEFAULT_SECTION_ID);
+    var state = collapsed[projectId] || {};
+    var changed = false;
+    if (sourceKey !== destinationKey && !state[sourceKey]) {
+      state[sourceKey] = true;
+      changed = true;
+    }
+    if (state[destinationKey]) {
+      delete state[destinationKey];
+      changed = true;
+    }
+    if (changed) {
+      collapsed[projectId] = state;
+      saveCollapsed();
+      debug('keyboard section state', sourceKey, '->', destinationKey);
+    }
   }
 
   function toggleCollapsed(projectId, sectionKey) {
@@ -1528,6 +1561,7 @@
         } else {
           delete membership[taskId];
         }
+        updateSectionsAfterKeyboardMove(projectId, stops[current], stops[next]);
         debug('section shortcut', taskId, stops[current], '->', stops[next]);
         core.ensureProject(config, projectId).membership = membership;
         return saveConfig().then(function () {

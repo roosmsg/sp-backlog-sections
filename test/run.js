@@ -699,6 +699,81 @@ test('headers: every section folds while a drag runs and stays folded after (opt
   });
 });
 
+test('a keyboard move opens its destination and folds the section it leaves; drags do not', async () => {
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost({ focusedTask: TASKS.find((t) => t.id === 'u1') });
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
+
+    // The plugin's own shortcut: u1 (bottom block) one section up, into the
+    // collapsed "Later" — which opens so the task is visible where it landed.
+    await host.shortcuts['section-up'].onExec();
+    await host.settle();
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later');
+    assert.deepStrictEqual(hidden(), [], 'the destination opened up');
+    assert.strictEqual(
+      doc.backlogList.querySelector('[data-backlog-sections-header="' + core.DEFAULT_SECTION_ID + '"]').querySelector('.bs-toggle').textContent,
+      '▸',
+      'the standard section it left folded'
+    );
+  });
+
+  // The app's own move command (Ctrl+Shift+ArrowUp) does the same.
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    assert.deepStrictEqual(hidden(), ['b1', 'b2']);
+    // u1 sits in the standard section; "move up" steps it into Later. Later
+    // opens and the standard section it left folds.
+    await host.userMovesInBacklog('p1', 'u1', ['a1', 'a2', 'b1', 'u1', 'b2'], '[Project] Move Task Up in Backlog');
+    assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'stepped up into Later');
+    assert.deepStrictEqual(hidden(), [], 'Later opened for the keyboard move');
+    assert.strictEqual(
+      doc.backlogList.querySelector('[data-backlog-sections-header="' + core.DEFAULT_SECTION_ID + '"]').querySelector('.bs-toggle').textContent,
+      '▸',
+      'the source section folded after ArrowUp'
+    );
+  });
+
+  // ArrowDown is symmetrical: the bottom task of Next steps into Later and
+  // opens that destination as well.
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    later.querySelector('.bs-toggle').dispatch('click');
+    const hidden = () =>
+      doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    assert.deepStrictEqual(hidden(), ['b1', 'b2']);
+    await host.userMovesInBacklog('p1', 'a2', ORDER, '[Project] Move Task Down in Backlog');
+    assert.strictEqual(stored(host).projects.p1.membership.a2, 'later', 'stepped down into Later');
+    assert.deepStrictEqual(hidden(), ['a1'], 'Later opened and the remaining task in Next folded after ArrowDown');
+    assert.strictEqual(
+      doc.backlogList.querySelector('[data-backlog-sections-header="next"]').querySelector('.bs-toggle').textContent,
+      '▸',
+      'the source section folded after ArrowDown'
+    );
+  });
+
+  // Reordering inside one section is not a section departure, so that section
+  // remains open.
+  await withHostDom(ORDER, async (doc) => {
+    const host = await startHost();
+    await host.userMovesInBacklog('p1', 'b2', ['a1', 'a2', 'b2', 'b1', 'u1'], '[Project] Move Task Up in Backlog');
+    assert.strictEqual(stored(host).projects.p1.membership.b2, 'later');
+    assert.strictEqual(
+      doc.backlogList.querySelector('[data-backlog-sections-header="later"]').querySelector('.bs-toggle').textContent,
+      '▾',
+      'an in-section move leaves the section open'
+    );
+  });
+});
+
 test('headers: with the option off, sections reopen to their stored state after a drag', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost({ storedConfig: { ...CONFIG, collapseAfterDrag: false } });

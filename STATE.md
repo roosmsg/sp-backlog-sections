@@ -4,7 +4,21 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.18.0)
+## What exists (2026-08-23, v2.20.0)
+
+- v2.20.0 (user request 2026-08-23, after confirming v2.19.0 works
+  "great"): when a keyboard move crosses a section boundary, the source
+  section now folds while the destination opens. A move within one section
+  leaves that section open. The host's Ctrl+Shift+ArrowUp/ArrowDown actions
+  and the plugin's own section shortcuts share this behaviour. Drag handling
+  is untouched and retains its `collapseAfterDrag` semantics. 53 tests.
+
+- v2.19.0 (user request 2026-08-23; live confirmed by the user): a task moved with the keyboard into a
+  collapsed section now opens that destination section, so the task remains
+  visible after Ctrl+Shift+ArrowUp/ArrowDown. This applies both to the host's
+  backlog move actions and the plugin's section shortcuts. Drag handling is
+  deliberately unchanged: a drag still follows `collapseAfterDrag` and does
+  not open its destination. 53 tests.
 
 - v2.18.0 (user requests 2026-08-23, after confirming v2.17.0 "perfect"):
   - **Sections stay collapsed after a drag** (option `collapseAfterDrag`,
