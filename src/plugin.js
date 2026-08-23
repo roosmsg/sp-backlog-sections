@@ -142,6 +142,90 @@
     return entry.count <= WRITE_LIMIT;
   }
 
+  // ---- adopting imported tasks into sections --------------------------------------
+
+  /*
+   * With the option on, a task that arrives in the backlog from the Microsoft
+   * To Do plugin is placed in the section named after its To Do list (the
+   * name match lives in core.matchSectionByListName; the To Do plugin
+   * publishes {listKey: name} in localStorage). Every task is considered
+   * once — the project's adopted map remembers that — so dragging it
+   * somewhere else afterwards is never undone by the next pass.
+   */
+  var TASK_INFO_TTL_MS = 5000;
+  var taskInfoCache = { at: 0, byId: null };
+
+  function taskInfos() {
+    if (taskInfoCache.byId && Date.now() - taskInfoCache.at < TASK_INFO_TTL_MS) {
+      return Promise.resolve(taskInfoCache.byId);
+    }
+    return Promise.resolve()
+      .then(function () {
+        return api.getTasks();
+      })
+      .then(function (tasks) {
+        var byId = {};
+        (tasks || []).forEach(function (task) {
+          if (task && task.id && task.issueId) {
+            byId[task.id] = String(task.issueId);
+          }
+        });
+        taskInfoCache = { at: Date.now(), byId: byId };
+        return byId;
+      })
+      .catch(function () {
+        return taskInfoCache.byId || {};
+      });
+  }
+
+  function readListMap() {
+    try {
+      var store = deviceStorage();
+      var raw = store ? store.getItem(core.LIST_MAP_STORAGE_KEY) : null;
+      var parsed = raw ? JSON.parse(raw) : null;
+      return parsed && parsed.lists && typeof parsed.lists === 'object' ? parsed.lists : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function adoptFromLists(projectId, order, membership) {
+    var entry = core.getProject(config, projectId);
+    var prunedAdopted = core.pruneAdopted(entry.adopted, order);
+    var adoptedChanged = !core.sameMembership(prunedAdopted, entry.adopted || {});
+    var view = { sections: config.sections, membership: membership };
+    var pending =
+      config.autoAssignFromLists &&
+      order.some(function (id) {
+        return !core.sectionOf(view, id) && !prunedAdopted[id];
+      });
+    if (!pending) {
+      if (adoptedChanged) {
+        core.ensureProject(config, projectId).adopted = prunedAdopted;
+      }
+      return Promise.resolve({ membership: membership, adoptedChanged: adoptedChanged });
+    }
+    return taskInfos().then(function (infos) {
+      var result = core.adoptTasksFromLists(view, order, infos, readListMap(), prunedAdopted);
+      var merged = {};
+      Object.keys(membership).forEach(function (id) {
+        merged[id] = membership[id];
+      });
+      Object.keys(result.additions).forEach(function (id) {
+        merged[id] = result.additions[id];
+      });
+      result.considered.forEach(function (id) {
+        prunedAdopted[id] = true;
+      });
+      adoptedChanged = adoptedChanged || result.considered.length > 0;
+      if (adoptedChanged) {
+        core.ensureProject(config, projectId).adopted = prunedAdopted;
+      }
+      debug('adopt', projectId, { additions: result.additions, considered: result.considered });
+      return { membership: merged, adoptedChanged: adoptedChanged };
+    });
+  }
+
   // ---- reconciliation -------------------------------------------------------------
 
   /*
@@ -196,10 +280,17 @@
       inferred: membership,
     });
     membership = core.pruneMembership(membership, order);
-    membership = applyHeaderDrop(projectId, membership, order, project);
+
+    return adoptFromLists(projectId, order, membership).then(function (adoption) {
+      return finishReconcile(projectId, order, project, adoption.membership, adoption.adoptedChanged);
+    });
+  }
+
+  function finishReconcile(projectId, order, project, membershipIn, forceSave) {
+    var membership = applyHeaderDrop(projectId, membershipIn, order, project);
 
     var work = Promise.resolve();
-    if (!core.sameMembership(membership, project.membership)) {
+    if (!core.sameMembership(membership, project.membership) || forceSave) {
       core.ensureProject(config, projectId).membership = membership;
       work = saveConfig();
     }

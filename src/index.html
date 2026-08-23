@@ -361,6 +361,11 @@
           return saveAndRender();
         }
 
+        function setAutoAssign(value) {
+          state.config.autoAssignFromLists = !!value;
+          return save();
+        }
+
         // ---- rendering -------------------------------------------------------
 
         function renderSections() {
@@ -447,6 +452,7 @@
         function renderOptions() {
           var id = 'opt-header-button';
           var clickId = 'opt-click-selects';
+          var autoId = 'opt-auto-assign';
           return el('section', { className: 'card' }, [
             el('h2', { text: t('UI.OPTIONS.HEADING') }),
             el('div', { className: 'option' }, [
@@ -475,6 +481,20 @@
               el('div', null, [
                 el('label', { for: clickId, text: t('UI.OPTIONS.CLICK_SELECTS') }),
                 el('div', { className: 'hint', text: t('UI.OPTIONS.CLICK_SELECTS_HINT') }),
+              ]),
+            ]),
+            el('div', { className: 'option' }, [
+              el('input', {
+                type: 'checkbox',
+                id: autoId,
+                checked: state.config.autoAssignFromLists,
+                onchange: function (event) {
+                  setAutoAssign(event.target.checked);
+                },
+              }),
+              el('div', null, [
+                el('label', { for: autoId, text: t('UI.OPTIONS.AUTO_ASSIGN') }),
+                el('div', { className: 'hint', text: t('UI.OPTIONS.AUTO_ASSIGN_HINT') }),
               ]),
             ]),
           ]);

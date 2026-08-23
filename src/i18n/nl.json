@@ -46,7 +46,9 @@
       "HEADER_BUTTON": "Toon de knop Backlogsecties in de kopbalk van de app",
       "HEADER_BUTTON_HINT": "De knop verschijnt in projectweergaven en opent deze pagina. Een wijziging gaat in na een herstart van de app.",
       "CLICK_SELECTS": "Eén klik selecteert een taak, twee klikken bewerken de naam",
-      "CLICK_SELECTS_HINT": "Zonder deze optie opent een klik op de naam van een taak die meteen om te bewerken. De optie geldt overal in de app, niet alleen in de backlog."
+      "CLICK_SELECTS_HINT": "Zonder deze optie opent een klik op de naam van een taak die meteen om te bewerken. De optie geldt overal in de app, niet alleen in de backlog.",
+      "AUTO_ASSIGN": "Plaats geïmporteerde taken in de sectie met de naam van hun Microsoft To Do-lijst",
+      "AUTO_ASSIGN_HINT": "Werkt samen met de Microsoft To Do-plugin: een nieuwe backlogtaak uit de lijst ‘💪 Korte termijn’ komt in de sectie met die naam (een sectienaam mag ook het begin van de lijstnaam zijn). Elke taak wordt één keer geplaatst; later verslepen wordt nooit teruggedraaid."
     },
     "BUTTONS": {
       "CANCEL": "Annuleren",

@@ -4,7 +4,23 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.3.0)
+## What exists (2026-08-23, v2.7.0)
+
+- v2.7.0 adds **automatic sectioning of imported tasks** (option
+  `autoAssignFromLists`, default off): a task that arrives in the backlog from
+  the Microsoft To Do plugin (sibling repo ~Projectssuper-productivity-mstodo)
+  is placed in the section named after its To Do list. The To Do plugin
+  publishes {listKey: listName} under localStorage `sp-mstodo.lists.v1` (both
+  plugin.js files run in the host window); the task's list is read from its
+  issueId prefix `<listKey>::`. Name match in core.matchSectionByListName:
+  exact on normalised names (variation selectors stripped, so 🎞 = 🎞️), else
+  the longest unique prefix in either direction ("💫 Lange termijn" takes the
+  list "💫 Lange termijn taken"); a tie places nothing. Every task is
+  considered once (per-project `adopted` map in the config, pruned to the
+  backlog), so dragging a task out afterwards is never undone and old tasks
+  are never grabbed retroactively. Adoption runs inside reconcileProject
+  (async step before applyHeaderDrop; task infos via getTasks, 5 s cache);
+  manifest gained the getTasks permission. Not yet verified live.
 
 - `src/core.js` — config normalisation (`{version: 2, sections: [{id, name}],
   projects: {id: {membership}}, headerButton}`; v1's per-project section lists

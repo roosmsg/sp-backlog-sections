@@ -46,7 +46,9 @@
       "HEADER_BUTTON": "Show the Backlog sections button in the app header",
       "HEADER_BUTTON_HINT": "The button appears in project views and opens this page. A change takes effect after a restart of the app.",
       "CLICK_SELECTS": "One click selects a task, two clicks edit its name",
-      "CLICK_SELECTS_HINT": "Without this, clicking a task name opens it for editing straight away. The option applies everywhere in the app, not only in the backlog."
+      "CLICK_SELECTS_HINT": "Without this, clicking a task name opens it for editing straight away. The option applies everywhere in the app, not only in the backlog.",
+      "AUTO_ASSIGN": "Place imported tasks in the section named after their Microsoft To Do list",
+      "AUTO_ASSIGN_HINT": "Works with the Microsoft To Do plugin: a new backlog task from the list ‘💪 Short term’ lands in the section of that name (a section name may also be the start of the list name). Each task is placed once; moving it afterwards is never undone."
     },
     "BUTTONS": {
       "CANCEL": "Cancel",

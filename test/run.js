@@ -817,6 +817,132 @@ test('README exists, is English and documents the essentials', () => {
   }
 });
 
+// ---- adopting imported tasks into sections ----------------------------------------------------
+
+const withListMap = async (map, fn) => {
+  const storage = new FakeStorage();
+  storage.setItem('sp-mstodo.lists.v1', JSON.stringify({ v: 1, updatedAt: 1, lists: map }));
+  const saved = globalThis.window;
+  globalThis.window = { localStorage: storage };
+  try {
+    return await fn(storage);
+  } finally {
+    if (saved === undefined) delete globalThis.window;
+    else globalThis.window = saved;
+  }
+};
+
+test('a list name finds its section: exact, unique prefix, never ambiguous', () => {
+  const sections = [
+    { id: 's1', name: '💫 Lange termijn' },
+    { id: 's2', name: '💪 Korte termijn' },
+    { id: 's3', name: '🎞️ Belegd in de agenda' },
+  ];
+  assert.strictEqual(core.matchSectionByListName(sections, '💪 Korte termijn'), 's2');
+  assert.strictEqual(core.matchSectionByListName(sections, '💫 Lange termijn taken'), 's1');
+  // Variation selector: the To Do list has 🎞 without VS16, the section 🎞️ with.
+  assert.strictEqual(core.matchSectionByListName(sections, '🎞 Belegd in de agenda'), 's3');
+  assert.strictEqual(core.matchSectionByListName(sections, 'Taken'), null);
+  assert.strictEqual(
+    core.matchSectionByListName(
+      [{ id: 'a', name: 'Werk' }, { id: 'b', name: 'Werk privé' }],
+      'Werk privé projecten',
+    ),
+    'b',
+    'the more specific prefix chain still resolves through the exact rule order',
+  );
+  assert.strictEqual(
+    core.matchSectionByListName([{ id: 'a', name: 'W' }, { id: 'b', name: 'We' }], 'Werk'),
+    'b',
+    'the longest prefix candidate wins',
+  );
+  assert.strictEqual(
+    core.matchSectionByListName([{ id: 'a', name: 'Werk A' }, { id: 'b', name: 'Werk B' }], 'Werk'),
+    null,
+    'a tie in specificity is ambiguous: nothing placed',
+  );
+});
+
+test('adoptTasksFromLists places new imported tasks once and only once', () => {
+  const project = { sections: [{ id: 's1', name: 'Next' }], membership: { a1: 's1' } };
+  const infos = { u1: 'FOLX::T1', u2: 'FOLY::T2', m1: null };
+  const names = { FOLX: 'Next' };
+  const first = core.adoptTasksFromLists(project, ['u1', 'u2', 'a1', 'z9'], infos, names, {});
+  assert.deepStrictEqual(first.additions, { u1: 's1' });
+  // u2 was considered (unknown list): marked, not placed. z9 has no issue info
+  // yet and is reconsidered next pass. a1 already sits in a section.
+  assert.deepStrictEqual(first.considered.sort(), ['u1', 'u2']);
+  const adopted = {};
+  first.considered.forEach((id) => (adopted[id] = true));
+  const second = core.adoptTasksFromLists(project, ['u1', 'u2', 'a1'], infos, names, adopted);
+  assert.deepStrictEqual(second.additions, {});
+  assert.deepStrictEqual(second.considered, []);
+});
+
+test('with the option on, an imported task lands in its list section on start-up', async () => {
+  await withListMap({ FOLX: 'Next' }, async () => {
+    const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
+    const host = await startHost({
+      tasks,
+      projects: [
+        { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
+      ],
+      storedConfig: { ...CONFIG, autoAssignFromLists: true },
+    });
+    const cfg = stored(host);
+    assert.strictEqual(cfg.projects.p1.membership.i1, 'next');
+    assert.strictEqual(cfg.projects.p1.adopted.i1, true);
+    // The backlog follows: i1 moves into the Next block.
+    assert.deepStrictEqual(host.project('p1').backlogTaskIds, ['u1', 'i1', 'a1', 'a2', 'b1', 'b2']);
+    // The plain task stays unsectioned and unmarked.
+    assert.strictEqual(cfg.projects.p1.membership.u1, undefined);
+    assert.strictEqual(cfg.projects.p1.adopted.u1, undefined);
+  });
+});
+
+test('an adopted task the user drags out is not re-placed', async () => {
+  await withListMap({ FOLX: 'Next' }, async () => {
+    const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
+    // As stored after the user dragged i1 out: no membership, adopted mark kept.
+    const config = {
+      ...CONFIG,
+      autoAssignFromLists: true,
+      projects: { p1: { membership: MEMBERSHIP, adopted: { i1: true } } },
+    };
+    const host = await startHost({
+      tasks,
+      projects: [
+        { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
+      ],
+      storedConfig: config,
+    });
+    const cfg = stored(host);
+    assert.strictEqual(cfg.projects.p1.membership.i1, undefined, 'the drag-out held');
+  });
+});
+
+test('with the option off nothing is placed and no tasks are fetched', async () => {
+  await withListMap({ FOLX: 'Next' }, async () => {
+    const tasks = TASKS.concat([{ id: 'i1', title: 'Imported', projectId: 'p1', tagIds: [], issueId: 'FOLX::AAMk1' }]);
+    const host = await startHost({
+      tasks,
+      projects: [
+        { id: 'p1', title: 'Inbox', taskIds: [], backlogTaskIds: ['i1', 'u1', 'a1', 'a2', 'b1', 'b2'], isEnableBacklog: true },
+      ],
+    });
+    assert.strictEqual(stored(host).projects.p1.membership.i1, undefined);
+    assert.strictEqual(host.calls.filter((c) => c.method === 'getTasks').length, 0);
+  });
+});
+
+test('the settings page toggles the automatic placement', async () => {
+  const screen = await startScreen();
+  const checkbox = screen.app.find((n) => n.getAttribute && n.getAttribute('id') === 'opt-auto-assign');
+  assert.ok(checkbox, 'auto-assign checkbox not rendered');
+  await screen.change(checkbox, true);
+  assert.strictEqual(screen.storedConfig().autoAssignFromLists, true);
+});
+
 // ---- run --------------------------------------------------------------------------------------------
 
 (async () => {

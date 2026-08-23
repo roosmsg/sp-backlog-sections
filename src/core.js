@@ -24,11 +24,18 @@ var BacklogSectionsCore = (function () {
   }
 
   function createDefaultConfig() {
-    return { version: CONFIG_VERSION, sections: [], projects: {}, headerButton: true, clickSelectsTask: true };
+    return {
+      version: CONFIG_VERSION,
+      sections: [],
+      projects: {},
+      headerButton: true,
+      clickSelectsTask: true,
+      autoAssignFromLists: false,
+    };
   }
 
   function emptyProject() {
-    return { membership: {} };
+    return { membership: {}, adopted: {} };
   }
 
   /*
@@ -85,6 +92,12 @@ var BacklogSectionsCore = (function () {
         project.membership[taskId.trim()] = sectionId;
       }
     });
+    var adoptedIn = isPlainObject(raw.adopted) ? raw.adopted : {};
+    Object.keys(adoptedIn).forEach(function (taskId) {
+      if (typeof taskId === 'string' && taskId.trim() && adoptedIn[taskId] === true) {
+        project.adopted[taskId.trim()] = true;
+      }
+    });
     return project;
   }
 
@@ -136,6 +149,9 @@ var BacklogSectionsCore = (function () {
     if (typeof input.clickSelectsTask === 'boolean') {
       config.clickSelectsTask = input.clickSelectsTask;
     }
+    if (typeof input.autoAssignFromLists === 'boolean') {
+      config.autoAssignFromLists = input.autoAssignFromLists;
+    }
     var projectsIn = isPlainObject(input.projects) ? input.projects : {};
     var remap = null;
     if (Array.isArray(input.sections)) {
@@ -164,8 +180,8 @@ var BacklogSectionsCore = (function () {
         source = { membership: moved };
       }
       var project = normalizeProject(source, knownSectionIds);
-      // An entry without memberships carries nothing.
-      if (Object.keys(project.membership).length) {
+      // An entry without memberships or adoption marks carries nothing.
+      if (Object.keys(project.membership).length || Object.keys(project.adopted).length) {
         config.projects[projectId.trim()] = project;
       }
     });
@@ -516,6 +532,113 @@ var BacklogSectionsCore = (function () {
     return added;
   }
 
+
+  // ---- automatic sectioning of imported tasks --------------------------------------
+
+  /*
+   * The Microsoft To Do plugin publishes {listKey: listName} under this
+   * localStorage key (same host window). A task imported by it carries an
+   * issueId of the form <listKey>::<taskKey>, which is what ties a backlog
+   * task back to the To Do list it came from.
+   */
+  var LIST_MAP_STORAGE_KEY = 'sp-mstodo.lists.v1';
+
+  function normalizeListName(name) {
+    return String(name == null ? '' : name)
+      .replace(/[︎️]/g, '') // emoji variation selectors: 🎞 and 🎞️ are one name
+      .replace(/s+/g, ' ')
+      .trim()
+      .toLowerCase();
+  }
+
+  /*
+   * The section a To Do list maps onto: an exact match on the normalised name
+   * first, then a unique prefix relation in either direction — the section
+   * "💫 Lange termijn" takes the list "💫 Lange termijn taken". Two candidates
+   * mean the name is ambiguous, and nothing is placed.
+   */
+  function matchSectionByListName(sections, listName) {
+    var wanted = normalizeListName(listName);
+    if (!wanted) {
+      return null;
+    }
+    var exact = null;
+    var byPrefix = [];
+    (sections || []).forEach(function (section) {
+      var have = normalizeListName(section.name);
+      if (!have) {
+        return;
+      }
+      if (have === wanted) {
+        exact = exact || section.id;
+      } else if (wanted.indexOf(have) === 0 || have.indexOf(wanted) === 0) {
+        byPrefix.push({ id: section.id, length: have.length });
+      }
+    });
+    if (exact) {
+      return exact;
+    }
+    // The most specific candidate wins ("Werk privé" over "Werk"); only a
+    // tie in length is truly ambiguous.
+    byPrefix.sort(function (a, b) {
+      return b.length - a.length;
+    });
+    if (!byPrefix.length || (byPrefix.length > 1 && byPrefix[0].length === byPrefix[1].length)) {
+      return null;
+    }
+    return byPrefix[0].id;
+  }
+
+  function listKeyOfIssueId(issueId) {
+    var raw = String(issueId == null ? '' : issueId);
+    var sep = raw.indexOf('::');
+    return sep > 0 ? raw.slice(0, sep) : '';
+  }
+
+  /*
+   * Which unsectioned tasks should be placed, based on the To Do list their
+   * issueId points into. Every task is considered exactly once (the caller
+   * marks the returned considered-ids in the project's adopted map), so a
+   * task the user later drags out of the section stays out, and old tasks are
+   * never grabbed retroactively when sections change.
+   */
+  function adoptTasksFromLists(project, order, taskInfos, listNames, adopted) {
+    var additions = {};
+    var considered = [];
+    (order || []).forEach(function (taskId) {
+      if (sectionOf(project, taskId) || (adopted && adopted[taskId])) {
+        return;
+      }
+      var issueId = taskInfos ? taskInfos[taskId] : null;
+      if (!issueId) {
+        return; // not an imported task (or unknown yet): reconsider next pass
+      }
+      considered.push(taskId);
+      var key = listKeyOfIssueId(issueId);
+      var name = key && listNames ? listNames[key] : '';
+      var sectionId = name ? matchSectionByListName(project.sections, name) : null;
+      if (sectionId) {
+        additions[taskId] = sectionId;
+      }
+    });
+    return { additions: additions, considered: considered };
+  }
+
+  /* The adopted marks restricted to tasks still in the backlog. */
+  function pruneAdopted(adopted, backlogTaskIds) {
+    var present = {};
+    (backlogTaskIds || []).forEach(function (id) {
+      present[id] = true;
+    });
+    var out = {};
+    Object.keys(adopted || {}).forEach(function (taskId) {
+      if (present[taskId]) {
+        out[taskId] = true;
+      }
+    });
+    return out;
+  }
+
   /* Membership restricted to tasks that are still in the backlog. */
   function pruneMembership(membership, backlogTaskIds) {
     var present = {};
@@ -669,6 +792,12 @@ var BacklogSectionsCore = (function () {
     stepSection: stepSection,
     inferMembership: inferMembership,
     pruneMembership: pruneMembership,
+    LIST_MAP_STORAGE_KEY: LIST_MAP_STORAGE_KEY,
+    normalizeListName: normalizeListName,
+    matchSectionByListName: matchSectionByListName,
+    listKeyOfIssueId: listKeyOfIssueId,
+    adoptTasksFromLists: adoptTasksFromLists,
+    pruneAdopted: pruneAdopted,
     desiredOrder: desiredOrder,
     blocks: blocks,
     sameList: sameList,
