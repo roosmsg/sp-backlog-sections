@@ -654,34 +654,35 @@ test('the project-updated snack of an own write is hidden, foreign ones stay', a
   });
 });
 
-test('headers: a collapsed section stays collapsed while a drag runs', async () => {
+test('headers: every section folds while a drag runs and reopens after', async () => {
   await withHostDom(ORDER, async (doc) => {
     const host = await startHost();
     const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    const next = doc.backlogList.querySelector('[data-backlog-sections-header="next"]');
     later.querySelector('.bs-toggle').dispatch('click');
     const hidden = () =>
       doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
     assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'collapsed: rows hidden');
 
-    // A drag starts and the pointer rests on the collapsed band: with a large
-    // backlog in mind nothing opens — the header itself is the drop target.
+    // A drag starts: EVERY section folds — the headers become a compact list
+    // of drop targets — and every chevron shows closed.
     const placeholder = doc.createElement('task');
     placeholder.className = 'cdk-drag-placeholder';
     placeholder.setAttribute('data-task-id', 'u1');
     doc.backlogList.appendChild(placeholder);
     FakeMutationObserver.instances[0].trigger();
+    assert.deepStrictEqual(hidden(), ['a1', 'a2', 'b1', 'b2', 'u1'], 'everything folded during the drag');
+    assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▸', 'expanded section shows closed while dragging');
+
     layout(doc.backlogList);
     doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
     assert.ok(later.className.includes('bs-target'), 'the header is marked as the drop target');
-    await sleep(650);
-    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'still folded, even under a resting pointer');
-    assert.strictEqual(later.querySelector('.bs-toggle').textContent, '▸', 'chevron stays closed');
-    doc.dispatch('pointermove', { clientX: 10, clientY: later.rect.top + 2 });
     doc.dispatch('pointerup', {});
     doc.backlogList.removeChild(placeholder);
     await sleep(300);
     assert.strictEqual(stored(host).projects.p1.membership.u1, 'later', 'released on the band: dropped into the section');
-    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'still folded, member inside');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2', 'u1'], 'stored state is back: only the collapsed section hides, member inside');
+    assert.strictEqual(next.querySelector('.bs-toggle').textContent, '▾', 'expanded section open again');
   });
 });
 

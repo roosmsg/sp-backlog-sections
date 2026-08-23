@@ -718,7 +718,7 @@
   var COLLAPSED_ATTR = 'data-backlog-sections-collapsed';
 
   function fillHeader(header, projectId, block, project) {
-    var isDown = isCollapsed(projectId, sectionKey(block.sectionId));
+    var isDown = dragging || isCollapsed(projectId, sectionKey(block.sectionId));
     if (isDown) {
       if (header.getAttribute(COLLAPSED_ATTR) !== '1') {
         header.setAttribute(COLLAPSED_ATTR, '1');
@@ -932,6 +932,8 @@
   function stopDragTracking() {
     markTarget(null);
     draggedTaskId = null;
+    // Sections folded for the drag reopen to their stored state.
+    reapplySoon();
     var doc = hostDocument();
     var list = doc && typeof doc.querySelector === 'function' ? doc.querySelector(LIST_SELECTOR) : null;
     if (list && list.className.indexOf(DRAGGING_CLASS) !== -1) {
@@ -1059,7 +1061,10 @@
         if (header.nextSibling !== first) {
           list.insertBefore(header, first);
         }
-        var hide = isCollapsed(activeProjectId, key);
+        // While a drag runs every section folds, so the headers sit close
+        // together as a compact list of drop targets; the stored collapse
+        // state comes back the moment the drag ends.
+        var hide = dragging || isCollapsed(activeProjectId, key);
         if (hide) {
           debug('collapse: hiding', key, block.taskIds.length);
         }

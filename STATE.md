@@ -4,7 +4,17 @@ Project note (register level): `D:\Obsidian\Werkplaats\Projecten\code-projects\s
 Brief: `AGENT_PROMPT.md` in this repo (git-ignored, like in the Tag Groups repo).
 Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same tooling).
 
-## What exists (2026-08-23, v2.15.0)
+## What exists (2026-08-23, v2.16.0)
+
+- v2.16.0 (user request 2026-08-23): **every section folds while a drag
+  runs** — the headers stack into a compact list of drop targets (the
+  header-drop path is the live-proven way in), every chevron shows ▸
+  (fillHeader: stored state OR dragging), and the stored collapse state
+  returns on release (stopDragTracking → reapplySoon, now unconditional —
+  safe since later()/cancelPending and the harness unload). The CDK sorts
+  against hidden rows during such a drag; the resulting host order is
+  irrelevant because the drop resolves via the header band and enforcement
+  rewrites the order anyway.
 
 - v2.15.0 (user report 2026-08-23): the host pops a **"Updated project
   settings" snack on every updateProject** — project.effects.ts only skips
