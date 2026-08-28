@@ -615,6 +615,24 @@ test('headers: collapse hides the rows of the section, is remembered per device,
   });
 });
 
+test('headers: a click anywhere on a header folds and opens the section, like the arrow', async () => {
+  await withHostDom(ORDER, async (doc) => {
+    await startHost();
+    const later = doc.backlogList.querySelector('[data-backlog-sections-header="later"]');
+    const hidden = () => doc.backlogList.children.filter((c) => c.tagName === 'task' && c.getAttribute('data-backlog-sections-hidden') === '1').map((c) => c.id.slice(2));
+    later.dispatch('click');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'a click on the header folds the section');
+    assert.strictEqual(later.getAttribute('data-backlog-sections-collapsed'), '1');
+    later.dispatch('click');
+    assert.deepStrictEqual(hidden(), [], 'a second click opens it again');
+    later.querySelector('.bs-toggle').dispatch('click');
+    assert.deepStrictEqual(hidden(), ['b1', 'b2'], 'the arrow still folds');
+    later.dispatch('click');
+    assert.deepStrictEqual(hidden(), [], 'and the header opens what the arrow folded');
+    assert.strictEqual(later.querySelector('.bs-toggle').getAttribute('aria-expanded'), 'true');
+  });
+});
+
 test('the project-updated snack of an own write is hidden, foreign ones stay', async () => {
   await withHostDom(['b2', 'u1', 'a1', 'b1', 'a2'], async (doc) => {
     // Start-up enforcement performs a write: the stamp is fresh.
@@ -916,7 +934,12 @@ test('the option: one click selects a task, two clicks open its name for editing
   await withHostDom(ORDER, async (doc) => {
     await startHost();
     // The app renders the title as its own element and edits it on click.
-    const row = doc.getElementById('t-a1');
+    // The rows of a main task view sit in a project-task-page (or a
+    // tag-task-page for My Day, Inbox and the other tags).
+    const page = doc.createElement('project-task-page');
+    doc.body.appendChild(page);
+    const row = doc.createElement('task');
+    page.appendChild(row);
     const title = doc.createElement('task-title');
     row.appendChild(title);
     const appSaw = [];
@@ -932,18 +955,59 @@ test('the option: one click selects a task, two clicks open its name for editing
     assert.strictEqual(appSaw.length, 1, 'the second click is handed to the app');
     assert.strictEqual(appSaw[0].__backlogSectionsSynthetic, true);
 
+    // The editor the app then renders has its text selected whole.
+    const editor = doc.createElement('textarea');
+    let selected = 0;
+    editor.select = () => (selected += 1);
+    title.appendChild(editor);
+    await sleep(40);
+    assert.strictEqual(selected, 1, 'the text is selected once the editor is there');
+
     // A click on a link inside a title is left alone.
     const link = doc.createElement('a');
     title.appendChild(link);
     stopped = 0;
     doc.dispatch('click', { target: link, stopPropagation: () => (stopped += 1), preventDefault() {} });
     assert.strictEqual(stopped, 0);
+
+    // And so is a title inside the task detail panel: there one click edits,
+    // as the app has it, for the task's own name and its sub-tasks alike.
+    const panel = doc.createElement('task-detail-panel');
+    const panelTitle = doc.createElement('task-title');
+    panel.appendChild(panelTitle);
+    row.appendChild(panel);
+    const panelSaw = [];
+    panelTitle.addEventListener('click', (event) => panelSaw.push(event));
+    stopped = 0;
+    doc.dispatch('click', { target: panelTitle, stopPropagation: () => (stopped += 1), preventDefault() {} });
+    assert.strictEqual(stopped, 0, 'the detail panel is left to the app');
+    // ...and the editor it opens on that click gets the same selection.
+    const panelEditor = doc.createElement('textarea');
+    let panelSelected = 0;
+    panelEditor.select = () => (panelSelected += 1);
+    panelTitle.appendChild(panelEditor);
+    await sleep(40);
+    assert.strictEqual(panelSelected, 1, 'the panel editor is selected whole');
+
+    // And a title anywhere outside a main task view — the planner, the
+    // schedule, search, the summary — is left to the app as well.
+    const elsewhere = doc.createElement('task');
+    doc.body.appendChild(elsewhere);
+    const elsewhereTitle = doc.createElement('task-title');
+    elsewhere.appendChild(elsewhereTitle);
+    stopped = 0;
+    doc.dispatch('click', { target: elsewhereTitle, stopPropagation: () => (stopped += 1), preventDefault() {} });
+    assert.strictEqual(stopped, 0, 'outside the main views the click is left to the app');
+    assert.notStrictEqual(elsewhere.focused, true);
   });
 
   // With the option off the app keeps its own behaviour.
   await withHostDom(ORDER, async (doc) => {
     await startHost({ storedConfig: { ...CONFIG, clickSelectsTask: false } });
-    const row = doc.getElementById('t-a1');
+    const page = doc.createElement('tag-task-page');
+    doc.body.appendChild(page);
+    const row = doc.createElement('task');
+    page.appendChild(row);
     const title = doc.createElement('task-title');
     row.appendChild(title);
     let stopped = 0;

@@ -156,7 +156,10 @@ class FakeDocument {
     this.listeners[type] = (this.listeners[type] || []).filter((f) => f !== fn);
   }
   dispatch(type, event) {
-    for (const fn of (this.listeners[type] || []).slice()) fn({ type, ...event });
+    // One event object for every listener, as the browser hands out: a marker a
+    // capture listener sets on the event is seen by the listeners after it.
+    const shared = { type, ...event };
+    for (const fn of (this.listeners[type] || []).slice()) fn(shared);
   }
   createElement(tag) {
     return new FakeElement(tag, this);

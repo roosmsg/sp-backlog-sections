@@ -228,6 +228,18 @@ Sibling project: `~\Projects\super-productivity-plugin` (Tag Groups; same toolin
   and a dblclick re-dispatches a flagged synthetic click so the app opens its
   editor. task-title.component.ts turns a click into edit mode itself, which
   is what this replaces.
+  Unreleased: titleOf() only answers inside project-task-page or
+  tag-task-page (the main task views) and never inside task-detail-panel,
+  so the panel, the planner, the schedule, search and the summary keep the
+  app's one-click editing.
+  Also unreleased: selectAllWhenOpen() — after the dblclick that opens the
+  editor, and after any plain click on a task-title (capture listener that
+  never stops the event), the textarea the app renders is select()ed on the
+  next turns; the app itself puts the caret at the end.
+  Also unreleased (user request 2026-08-28): a click anywhere on a header
+  folds or opens the section, exactly like the arrow (header click listener
+  in buildHeader; nothing during a drag; the arrow's click stops before it),
+  and every header shows the pointer cursor.
 - v2.5.0: preset emoji are 💪 ☀️ 💫 🎞️; core.RENAMED_SECTIONS renames exactly the
   four old preset names (EN+NL) on load, so sections added earlier follow
   without touching their ids or any name the user typed.

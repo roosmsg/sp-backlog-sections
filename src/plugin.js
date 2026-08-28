@@ -719,6 +719,7 @@
       ' color: var(--text-color-muted, inherit); user-select: none; }\n' +
       '.' + HEADER_CLASS + ' .bs-toggle { all: unset; cursor: pointer; width: 1.5em; font-size: 1.1em; text-align: center; opacity: .8; }\n' +
       '.' + HEADER_CLASS + ' .bs-toggle:hover { opacity: 1; }\n' +
+      '.' + HEADER_CLASS + ' { cursor: pointer; }\n' +
       '.' + HEADER_CLASS + ' .bs-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }\n' +
       '.' + HEADER_CLASS + ' .bs-count { flex: none; font-weight: 400; font-size: .85em; opacity: .8; }\n' +
       '.' + HEADER_CLASS + '.bs-loose { font-style: italic; font-weight: 500; }\n' +
@@ -779,6 +780,18 @@
       // outlives the project it was first drawn for — the app re-renders the
       // rows around it when the user switches project, but leaves this
       // element alone — and collapsing is remembered per project.
+      toggleCollapsed(activeProjectId, key);
+    });
+    // A header folds and opens on a click anywhere on it, not only on the
+    // arrow: the header is the whole of a section's handle, so the whole of
+    // it is the thing to press, both ways. The arrow's own click stops before
+    // it gets here, so the two cannot both fire. Not during a drag, when
+    // every header is folded as a drop target and a click is the end of a
+    // drop, not a request to toggle.
+    header.addEventListener('click', function () {
+      if (dragging) {
+        return;
+      }
       toggleCollapsed(activeProjectId, key);
     });
     var name = doc.createElement('span');
@@ -1326,9 +1339,16 @@
    * the option on, a single click only selects the task — the app's own
    * behaviour for a click next to the title — and editing waits for a double
    * click, which is passed on as the click the app expects.
+   *
+   * Only in the main task views: a project, My Day, Inbox, any tag — the
+   * pages the app renders as project-task-page or tag-task-page. Elsewhere
+   * (the task detail panel, the planner, the schedule, search, the daily
+   * summary) one click edits as the app has it.
    */
+  var MAIN_VIEW_TAGS = ['project-task-page', 'tag-task-page'];
   var TITLE_SELECTOR = 'task-title';
   var SYNTHETIC = '__backlogSectionsSynthetic';
+  var SWALLOWED = '__backlogSectionsSwallowed';
   var clickListenersOn = false;
 
   function titleOf(event) {
@@ -1338,6 +1358,19 @@
     }
     if (target.tagName === 'A' || target.tagName === 'TEXTAREA' || target.closest('a')) {
       return null; // links and the open editor keep working as they are
+    }
+    if (target.closest('task-detail-panel')) {
+      return null; // the detail panel: its title and its sub-tasks edit on one click, as the app has it
+    }
+    var inMainView = false;
+    for (var i = 0; i < MAIN_VIEW_TAGS.length; i++) {
+      if (target.closest(MAIN_VIEW_TAGS[i])) {
+        inMainView = true;
+        break;
+      }
+    }
+    if (!inMainView) {
+      return null; // not a main task view: the app's own click stands
     }
     return target.closest(TITLE_SELECTOR);
   }
@@ -1354,6 +1387,7 @@
     if (typeof event.stopPropagation === 'function') {
       event.stopPropagation();
     }
+    event[SWALLOWED] = true; // no editor will open on this click
     if (typeof event.preventDefault === 'function') {
       event.preventDefault();
     }
@@ -1384,6 +1418,57 @@
     click[SYNTHETIC] = true;
     debug('title double click: opening the editor');
     title.dispatchEvent(click);
+    selectAllWhenOpen(title);
+  }
+
+  /*
+   * When the editor opens, its text is selected whole: the first keystroke
+   * replaces the name, as in most list apps. The app puts the caret at the
+   * end instead. The editor is a textarea the app renders after the click,
+   * so the selection is made on the next turns, for as long as it takes the
+   * textarea to appear (a few frames at most); if none appears — the click
+   * only selected the row — nothing happens.
+   */
+  var SELECT_ALL_DELAYS_MS = [0, 16, 50, 120, 250];
+
+  function selectAllWhenOpen(title) {
+    if (!title || typeof title.querySelector !== 'function' || typeof setTimeout !== 'function') {
+      return;
+    }
+    var step = 0;
+    var attempt = function () {
+      var editor = title.querySelector('textarea');
+      if (editor && typeof editor.select === 'function') {
+        editor.select();
+        debug('editor opened: text selected');
+        return;
+      }
+      if (step < SELECT_ALL_DELAYS_MS.length) {
+        setTimeout(attempt, SELECT_ALL_DELAYS_MS[step++]);
+      }
+    };
+    attempt();
+  }
+
+  /*
+   * Every click a title receives — in the main views with the option off, in
+   * the detail panel, anywhere the app opens its editor on one click — is
+   * followed by the same selection. Runs in the capture phase beside the
+   * option's own listener and never stops the event.
+   */
+  function onTitleClickSelectAll(event) {
+    var target = event && event.target;
+    if (!target || typeof target.closest !== 'function') {
+      return;
+    }
+    if (target.tagName === 'A' || target.tagName === 'TEXTAREA' || target.closest('a')) {
+      return;
+    }
+    var title = target.closest(TITLE_SELECTOR);
+    if (!title || (event && (event[SYNTHETIC] || event[SWALLOWED]))) {
+      return;
+    }
+    selectAllWhenOpen(title);
   }
 
   function startClickListeners() {
@@ -1394,6 +1479,7 @@
     clickListenersOn = true;
     doc.addEventListener('click', onTitleClick, true);
     doc.addEventListener('dblclick', onTitleDblClick, true);
+    doc.addEventListener('click', onTitleClickSelectAll, true);
   }
 
   function stopClickListeners() {
@@ -1404,6 +1490,7 @@
     clickListenersOn = false;
     if (doc && typeof doc.removeEventListener === 'function') {
       doc.removeEventListener('click', onTitleClick, true);
+      doc.removeEventListener('click', onTitleClickSelectAll, true);
       doc.removeEventListener('dblclick', onTitleDblClick, true);
     }
   }
