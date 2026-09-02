@@ -31,4 +31,10 @@ Download the plugin from the latest [release](https://github.com/roosmsg/sp-back
 
 ## License
 
-[MIT](LICENSE).
+[MIT](LICENSE)
+
+## Support
+
+If you love this open source project, consider buying me a coffee on Ko-fi!
+
+<a href="https://ko-fi.com/roosmsg" target="_blank"><img width="200" src="https://storage.ko-fi.com/cdn/brandasset/kofi_button_stroke.png" /></a>
