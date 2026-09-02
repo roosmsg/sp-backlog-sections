@@ -1,7 +1,6 @@
 # Backlog Sections — a Super Productivity plugin
 
-Backlog Sections adds named sections to the backlog of each project in [Super Productivity](https://github.com/super-productivity/super-productivity). You define the sections once and every project's backlog uses the same set. Drag a task under another header and it moves to that section. Sections and memberships are stored by the plugin; the app's tasks are never changed, only the order of the backlog list (`backlogTaskIds`).
-
+Backlog Sections adds named sections to the backlog of each project in [Super Productivity](https://github.com/super-productivity/super-productivity). You define the sections once and every project's backlog uses the same set. Drag a task under another header and it moves to that section. Sections and memberships are stored by the plugin; the app's tasks are never changed, only the order of the backlog list.
 <img src="docs/backlog.png" alt="A project backlog showing the four standard sections — Short term, Medium term, Long term and Scheduled in the calendar — plus No section, each collapsed and showing its task count" width="300">
 
 ## Why
