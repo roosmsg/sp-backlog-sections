@@ -1147,7 +1147,7 @@ test('manifest and build: valid, no menu entry, ZIP round-trips, index.html unde
 
 test('README exists, is English and documents the essentials', () => {
   const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
-  for (const needle of ['Backlog Sections', 'backlogTaskIds', 'Settings → Plugins', 'collapse']) {
+  for (const needle of ['Backlog Sections', 'order of the backlog list', 'Settings → Plugins', 'collapse']) {
     assert.ok(readme.includes(needle), needle);
   }
   for (const word of ['het', 'een', 'niet', 'wordt', 'sectie']) {
