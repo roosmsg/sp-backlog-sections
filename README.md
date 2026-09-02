@@ -16,7 +16,7 @@ Because that judgement can change, moving tasks between sections is deliberately
 ## Install
 
 Requires Super Productivity 18.19.0 or newer, with the backlog enabled for the project.
-Download the plugin from the latest [release](https://github.com/roosmsg/super-productivity-backlog-sections/releases) — upload it under **Settings → Plugins** and enable it. Open the plugin's settings page to add the standard sections or type your own. The section list is shared by every project; which task sits in which section is not.
+Download the plugin from the latest [release](https://github.com/roosmsg/sp-backlog-sections/releases) — upload it under **Settings → Plugins** and enable it. Open the plugin's settings page to add the standard sections or type your own. The section list is shared by every project; which task sits in which section is not.
 
 <img src="docs/settings.png" alt="The plugin's settings page: the shared list of sections with reorder and delete buttons, an Add the standard sections button, and the behaviour options" width="620">
 
