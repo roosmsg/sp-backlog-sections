@@ -4,7 +4,7 @@ Backlog Sections adds named sections to the backlog of each project in [Super Pr
 
 <img src="docs/overview.png" alt="A project in Super Productivity: the task list above the divider, and below it the backlog with headers for Short term, Medium term, Long term, Scheduled in the calendar and No section, each showing its task count" width="720" height="675">
 
-<img src="docs/backlog.png" alt="A project backlog showing the four standard sections — Short term, Medium term, Long term and Scheduled in the calendar — plus No section, each collapsed and showing its task count" width="280" height="675">
+<img src="docs/backlog.png" alt="A project backlog showing the four standard sections — Short term, Medium term, Long term and Scheduled in the calendar — plus No section, each collapsed and showing its task count" width="295" height="675">
 
 ## Why
 A project backlog is one flat list. As it grows, tasks pile up without much structure, making it harder to see what deserves attention, what can wait, and what belongs together.
